@@ -1,0 +1,71 @@
+[project]
+name = "unleashed-podcasts-cli"
+version = "0.1.0"
+description = "Command-line interface for the UnleashedPodcasts.com private v1 API"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Scott Keck-Warren" }]
+keywords = ["podcast", "cli", "unleashedpodcasts"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "click>=8.1",
+    "httpx>=0.27",
+    "jmespath>=1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/scottkeckwarren/UnleashedPodcastsCli"
+Issues = "https://github.com/scottkeckwarren/UnleashedPodcastsCli/issues"
+
+[project.scripts]
+unleashed = "unleashed.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "respx>=0.21",
+    "mypy>=1.11",
+    "ruff>=0.6",
+    "types-jmespath",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/unleashed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-m 'not live' --cov=unleashed --cov-report=term-missing --cov-fail-under=90 --strict-markers"
+markers = [
+    "live: hits a real API host; deselected by default, never runs in CI",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["src/unleashed"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src"]
