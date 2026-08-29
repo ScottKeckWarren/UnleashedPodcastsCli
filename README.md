@@ -8,10 +8,42 @@ from the environment, JSON in and JSON out.
 
 ## Install
 
+Once published to PyPI:
+
 ```bash
 uv tool install unleashed-podcasts-cli
-# or
-pipx install unleashed-podcasts-cli
+```
+
+Straight from the repository, which works today:
+
+```bash
+uv tool install git+https://github.com/ScottKeckWarren/UnleashedPodcastsCli
+```
+
+Run it once without installing anything:
+
+```bash
+uvx --from git+https://github.com/ScottKeckWarren/UnleashedPodcastsCli unleashed --help
+```
+
+`pipx` works everywhere `uv tool` does, if you prefer it. Plain `pip install` only
+inside an activated virtualenv — a CLI belongs in its own environment, not alongside
+your project's dependencies.
+
+To upgrade or remove:
+
+```bash
+uv tool upgrade unleashed-podcasts-cli
+uv tool uninstall unleashed-podcasts-cli
+```
+
+### Working on the CLI itself
+
+```bash
+git clone git@github.com:ScottKeckWarren/UnleashedPodcastsCli.git
+cd UnleashedPodcastsCli
+uv tool install --editable .    # `unleashed` on PATH, tracking your working tree
+uv sync && uv run pytest        # run the suite
 ```
 
 ## Configure

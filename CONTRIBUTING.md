@@ -50,3 +50,23 @@ uv run ruff format --check .
 uv run mypy
 uv run pytest
 ```
+
+## Releasing
+
+Releases are tag-driven. The workflow refuses to publish a tag that disagrees with the
+version in `pyproject.toml`, and re-runs lint, types, and the full test suite before
+building — a release must never ship code that would fail CI.
+
+```bash
+# bump version in pyproject.toml, update CHANGELOG.md, commit
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+That builds, publishes to PyPI via Trusted Publishing, and cuts a GitHub Release with
+the artifacts attached. There is no PyPI API token in repository secrets; GitHub proves
+its identity to PyPI over OIDC instead.
+
+One-time setup on PyPI, done in a browser: register this repository as a trusted
+publisher for the `unleashed-podcasts-cli` project, with workflow `release.yml` and
+environment `pypi`.
