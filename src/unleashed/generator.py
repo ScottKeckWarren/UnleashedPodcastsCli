@@ -17,7 +17,7 @@ import click
 from unleashed.client import Client, DescribedRequest
 from unleashed.config import Config, load_config
 from unleashed.errors import UsageError
-from unleashed.manifest import Field, FieldType, Filter, Resource
+from unleashed.manifest import Attachment, Field, FieldType, Filter, KeyValueMap, Resource
 from unleashed.output import OutputFormat, default_output, render
 from unleashed.reporting import handle_errors
 
@@ -50,6 +50,13 @@ def _option_for(spec: Field | Filter, *, required_note: bool = False) -> click.O
     if required_note and isinstance(spec, Field) and spec.required_on_create:
         help_text = f"{help_text} Required.".strip()
 
+    if spec.type is FieldType.MAP:
+        return click.Option(
+            [spec.flag_name, spec.name],
+            multiple=True,
+            metavar="KEY=VALUE",
+            help=f"{help_text} Repeat for several keys. Values are sent as strings.".strip(),
+        )
     if spec.type is FieldType.BOOL and not spec.enum:
         flag = spec.name.replace("_", "-")
         return click.Option(
@@ -116,6 +123,23 @@ def _serialise(value: Any) -> Any:
     return value
 
 
+def _pairs(raw: tuple[str, ...], flag: str) -> dict[str, str]:
+    """Turn repeated KEY=VALUE flags into a map. Only the first = splits."""
+    pairs: dict[str, str] = {}
+    for item in raw:
+        key, sep, value = item.partition("=")
+        if not sep or not key.strip():
+            raise UsageError(f"{flag} expects KEY=VALUE, got '{item}'.")
+        pairs[key.strip()] = value
+    return pairs
+
+
+def _field_value(field: Field, value: Any) -> Any:
+    if field.type is FieldType.MAP:
+        return _pairs(value, field.flag_name)
+    return _serialise(value)
+
+
 def _as_query_value(value: Any) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
@@ -135,7 +159,7 @@ def _given(ctx: click.Context, name: str) -> bool:
 def _body_from_flags(
     ctx: click.Context, fields: tuple[Field, ...], values: dict[str, Any]
 ) -> dict[str, Any]:
-    body = {f.name: _serialise(values[f.name]) for f in fields if _given(ctx, f.name)}
+    body = {f.name: _field_value(f, values[f.name]) for f in fields if _given(ctx, f.name)}
     for field in fields:
         if not field.nullable or not values.get(f"clear_{field.name}"):
             continue
@@ -249,7 +273,7 @@ def _uuid_argument() -> click.Argument:
 
 def build_create_command(resource: Resource) -> click.Command:
     fields = resource.create_fields
-    singular = resource.name.rstrip("s")
+    singular = resource.singular
 
     @handle_errors
     def callback(**values: Any) -> None:
@@ -279,7 +303,7 @@ def build_create_command(resource: Resource) -> click.Command:
 
 def build_update_command(resource: Resource) -> click.Command:
     fields = resource.update_fields
-    singular = resource.name.rstrip("s")
+    singular = resource.singular
 
     @handle_errors
     def callback(uuid: str, **values: Any) -> None:
@@ -311,7 +335,7 @@ def build_update_command(resource: Resource) -> click.Command:
 
 
 def build_get_command(resource: Resource) -> click.Command:
-    singular = resource.name.rstrip("s")
+    singular = resource.singular
 
     @handle_errors
     def callback(uuid: str, **values: Any) -> None:
@@ -331,7 +355,7 @@ def build_get_command(resource: Resource) -> click.Command:
 
 
 def build_delete_command(resource: Resource) -> click.Command:
-    singular = resource.name.rstrip("s")
+    singular = resource.singular
 
     @handle_errors
     def callback(uuid: str, **values: Any) -> None:
@@ -423,6 +447,179 @@ def _check_sort(resource: Resource, sort: str) -> None:
         raise UsageError(f"Cannot sort by '{sort}'. Allowed columns: {allowed} (prefix - for desc)")
 
 
+# --- attachments -------------------------------------------------------------
+
+
+def build_attach_command(resource: Resource, attachment: Attachment) -> click.Command:
+    @handle_errors
+    def callback(uuid: str, **values: Any) -> None:
+        ctx = click.get_current_context()
+        record_id: str = values.pop(attachment.id_field)
+        run = _Runtime(ctx, values)
+        path = f"/{resource.name}/{uuid}/{attachment.name}"
+        body = {attachment.id_field: record_id}
+        if run.dry_run:
+            run.describe("PUT", path, body)
+            return
+        run.show(run.client.request("PUT", path, json=body))
+
+    params: list[click.Parameter] = [
+        _uuid_argument(),
+        click.Option(
+            [attachment.id_flag_name, attachment.id_field],
+            required=True,
+            help=attachment.help or None,
+        ),
+    ]
+    params.extend(_common_options(accepts_json=False))
+    return click.Command(
+        name="attach",
+        params=params,
+        callback=callback,
+        short_help=f"Attach a {attachment.name} to one {resource.singular}.",
+        help=(
+            f"Attach a {attachment.name} to one {resource.singular}.\n\n"
+            "Replaces whatever was attached before."
+        ),
+    )
+
+
+def build_detach_command(resource: Resource, attachment: Attachment) -> click.Command:
+    @handle_errors
+    def callback(uuid: str, **values: Any) -> None:
+        ctx = click.get_current_context()
+        run = _Runtime(ctx, values)
+        path = f"/{resource.name}/{uuid}/{attachment.name}"
+        if run.dry_run:
+            run.describe("DELETE", path)
+            return
+        run.show(run.client.request("DELETE", path))
+
+    params: list[click.Parameter] = [_uuid_argument()]
+    params.extend(_common_options(accepts_json=False))
+    return click.Command(
+        name="detach",
+        params=params,
+        callback=callback,
+        short_help=f"Detach the {attachment.name} from one {resource.singular}.",
+        help=(
+            f"Detach the {attachment.name} from one {resource.singular}.\n\n"
+            "The detached record itself is kept. Detaching when nothing is attached "
+            "succeeds and changes nothing."
+        ),
+    )
+
+
+def build_attachment_group(resource: Resource, attachment: Attachment) -> click.Group:
+    group = click.Group(
+        name=attachment.name,
+        help=f"Attach or detach the {attachment.name} of one {resource.singular}.",
+    )
+    group.add_command(build_attach_command(resource, attachment))
+    group.add_command(build_detach_command(resource, attachment))
+    return group
+
+
+# --- key-value maps ----------------------------------------------------------
+
+_SCALARS = (str, int, float, bool)
+
+
+def _map_from_json(raw: str) -> dict[str, Any]:
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise UsageError(f"--cli-input-json is not valid JSON: {exc}") from exc
+    if not isinstance(parsed, dict):
+        raise UsageError("--cli-input-json must be a JSON object for this action.")
+    nested = sorted(k for k, v in parsed.items() if v is not None and not isinstance(v, _SCALARS))
+    if nested:
+        raise UsageError(
+            f"--cli-input-json values must be strings, numbers, booleans, or null. "
+            f"Nested values under: {', '.join(nested)}"
+        )
+    return parsed
+
+
+def _map_command(
+    resource: Resource, kv: KeyValueMap, *, name: str, method: str, merge: bool
+) -> click.Command:
+    @handle_errors
+    def callback(uuid: str, **values: Any) -> None:
+        ctx = click.get_current_context()
+        raw_set: tuple[str, ...] = values.pop("set")
+        raw_unset: tuple[str, ...] = values.pop("unset", ())
+        run = _Runtime(ctx, values)
+
+        if run.raw_json is not None:
+            if raw_set or raw_unset:
+                raise UsageError("--cli-input-json cannot be combined with --set or --unset.")
+            body = _map_from_json(run.raw_json)
+        else:
+            body = {**_pairs(raw_set, "--set"), **dict.fromkeys(raw_unset)}
+            if not merge and not body:
+                raise UsageError(
+                    f"Nothing to replace {kv.name} with. Pass --set, or "
+                    "--cli-input-json '{}' to clear every key."
+                )
+
+        path = f"/{resource.name}/{uuid}/{kv.name}"
+        if run.dry_run:
+            run.describe(method, path, body)
+            return
+        run.show(run.client.request(method, path, json=body))
+
+    params: list[click.Parameter] = [
+        _uuid_argument(),
+        click.Option(
+            ["--set", "set"],
+            multiple=True,
+            metavar="KEY=VALUE",
+            help="Key to write. Repeat for several. Values are sent as strings.",
+        ),
+    ]
+    if merge:
+        params.append(
+            click.Option(
+                ["--unset", "unset"],
+                multiple=True,
+                metavar="KEY",
+                help="Key to delete. Repeat for several.",
+            )
+        )
+    params.extend(_common_options())
+
+    if merge:
+        help_text = (
+            f"Merge keys into the {kv.name} of one {resource.singular}.\n\n"
+            "Keys you --set overwrite, keys you --unset are deleted, every other key is "
+            "kept. Use --cli-input-json for number, boolean, or null values."
+        )
+    else:
+        help_text = (
+            f"Replace the whole {kv.name} of one {resource.singular}.\n\n"
+            "Every key you do not --set is removed. Use --cli-input-json for number or "
+            "boolean values, or --cli-input-json '{}' to clear every key."
+        )
+    return click.Command(
+        name=name,
+        params=params,
+        callback=callback,
+        short_help=help_text.split("\n", 1)[0],
+        help=help_text,
+    )
+
+
+def build_map_group(resource: Resource, kv: KeyValueMap) -> click.Group:
+    group = click.Group(
+        name=kv.name,
+        help=kv.help or f"Merge into or replace the {kv.name} of one {resource.singular}.",
+    )
+    group.add_command(_map_command(resource, kv, name="merge", method="PATCH", merge=True))
+    group.add_command(_map_command(resource, kv, name="replace", method="PUT", merge=False))
+    return group
+
+
 BUILDERS = (
     build_create_command,
     build_list_command,
@@ -433,8 +630,16 @@ BUILDERS = (
 
 
 def build_group(resource: Resource) -> click.Group:
-    """One group per resource, five standard actions, no ad-hoc verbs."""
+    """One group per resource, five standard actions, no ad-hoc verbs.
+
+    Attachments nest as their own noun, so `<resource> <attachment> attach` keeps the
+    noun verb shape instead of inventing a verb per sub-resource.
+    """
     group = click.Group(name=resource.name, help=f"Work with {resource.name}.")
     for builder in BUILDERS:
         group.add_command(builder(resource))
+    for attachment in resource.attachments:
+        group.add_command(build_attachment_group(resource, attachment))
+    for kv in resource.maps:
+        group.add_command(build_map_group(resource, kv))
     return group

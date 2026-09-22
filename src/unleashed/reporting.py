@@ -8,13 +8,26 @@ from typing import Any, TypeVar
 
 import click
 
-from unleashed.errors import UnleashedError, ValidationError
+from unleashed.errors import AuthError, ForbiddenError, UnleashedError, ValidationError
 
 F = TypeVar("F", bound=Callable[..., Any])
 
 
+#: What to do next, for the failures a fresh token fixes.
+HINTS: dict[type[UnleashedError], str] = {
+    AuthError: "Run: unleashed login",
+    ForbiddenError: (
+        "This token does not grant that action. Run: unleashed login, "
+        "and approve the ability it needs."
+    ),
+}
+
+
 def report(error: UnleashedError) -> None:
     click.echo(f"Error: {error}", err=True)
+    hint = HINTS.get(type(error))
+    if hint:
+        click.echo(hint, err=True)
     if isinstance(error, ValidationError):
         for field, messages in error.errors.items():
             for message in messages:
