@@ -17,6 +17,7 @@ class ExitCode(IntEnum):
     NOT_FOUND = 5
     CONFLICT = 6
     RATE_LIMITED = 7
+    FORBIDDEN = 8
 
 
 class UnleashedError(Exception):
@@ -53,6 +54,12 @@ class AuthError(ApiError):
     exit_code = ExitCode.AUTH
 
 
+class ForbiddenError(ApiError):
+    """The token is valid but lacks the ability this route demands."""
+
+    exit_code = ExitCode.FORBIDDEN
+
+
 class NotFoundError(ApiError):
     exit_code = ExitCode.NOT_FOUND
 
@@ -83,6 +90,7 @@ class RateLimitError(ApiError):
 
 STATUS_ERRORS: dict[int, type[ApiError]] = {
     401: AuthError,
+    403: ForbiddenError,
     404: NotFoundError,
     409: ConflictError,
     422: ValidationError,

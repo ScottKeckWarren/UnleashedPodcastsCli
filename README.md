@@ -4,7 +4,7 @@ A command-line interface for the [UnleashedPodcasts.com](https://unleashedpodcas
 private v1 API, shaped like the AWS CLI: predictable `noun verb` commands, credentials
 from the environment, JSON in and JSON out.
 
-**Status: v0.1 — all five episode actions, plus `configure`.** See [PRD.md](PRD.md) for the roadmap.
+**Status: episodes, short form videos, and people, plus `login`, `whoami`, and `configure`.** See [PRD.md](PRD.md) for the roadmap.
 
 ## Install
 
@@ -46,7 +46,41 @@ uv tool install --editable .    # `unleashed` on PATH, tracking your working tre
 uv sync && uv run pytest        # run the suite
 ```
 
+## Log in
+
+```bash
+unleashed login
+```
+
+That opens your browser on the site's approval page. Sign in if asked, press
+**Approve**, and the CLI saves a personal access token to `~/.unleashed/config`.
+The token never passes through the browser — the browser carries a one-use code that
+only the waiting `login` process can redeem, and only for two minutes.
+
+```bash
+unleashed login --profile client-a                   # write a named profile
+unleashed login --local                              # write ./.unleashed/config
+unleashed login --api-url http://localhost/apiv1     # log in to another host
+unleashed login --ability episodes:read              # ask for less (repeatable)
+unleashed login --device-name studio-mac             # name shown in the web app
+unleashed login --no-browser                         # print the URL instead
+```
+
+By default the token asks for every ability the site grants. The device name defaults
+to your hostname; it is what you will see in the web app when you revoke the token.
+
+Check which account and abilities a token carries:
+
+```bash
+unleashed whoami
+```
+
+A `401` means the token is dead — run `unleashed login` again. A `403` means the token
+is alive but was not granted the ability that command needs; it exits `8`.
+
 ## Configure
+
+To paste a token by hand instead — for CI, or the legacy static token:
 
 ```bash
 unleashed configure
@@ -211,6 +245,66 @@ unleashed episodes delete <uuid>
 
 The API soft-deletes. There is no restore endpoint; recovery is a database task.
 
+## Short form videos
+
+The same five actions, plus a `video-file` attachment.
+
+```bash
+unleashed short-form-videos create --title "Three mistakes new hosts make" \
+    --podcast-episode-uuid 7f3a1c2e-... --target-date 2026-10-01
+unleashed short-form-videos list --origin generated --standalone --sort -target_date
+unleashed short-form-videos get <uuid>
+unleashed short-form-videos update <uuid> --clear-podcast-uuid     # detach podcast and episode
+unleashed short-form-videos delete <uuid>
+```
+
+A short stands alone, sits under a podcast, or sits under an episode. An episode brings
+its own podcast, so `--podcast-uuid` is only needed without one. Moving a short to
+another podcast drops its episode.
+
+### Video file
+
+```bash
+unleashed short-form-videos video-file attach <uuid> --file-uuid <file-uuid>
+unleashed short-form-videos video-file detach <uuid>
+```
+
+Attaching replaces any video already attached; detaching keeps the file itself. Upload
+the video in the web app first — file uploads use the browser session, not the API
+token, so the CLI does not upload.
+
+## People
+
+The same five actions, plus a `metadata` sub-resource.
+
+```bash
+unleashed people create --name "Ada Lovelace" --email ada@example.test \
+    --metadata twitter=@ada --metadata source=cli
+unleashed people list --no-has-email --last-outreach-before 2026-06-01 --sort last_outreach
+unleashed people list --podcast-uuid 7f3a1c2e-...        # people who appeared on a show
+unleashed people get <uuid>
+unleashed people update <uuid> --last-outreach 2026-09-22 --clear-email
+unleashed people delete <uuid>
+```
+
+`--last-outreach-before` includes people never contacted at all — they are the most
+overdue. `last_outreach` cannot be cleared once set, so it has no `--clear-` flag.
+
+### Metadata
+
+Metadata is a flat map of strings, numbers, booleans, and nulls. `--metadata KEY=VALUE`
+on `create` and `update` sends strings, and `update` merges into the existing keys.
+To delete keys, send typed values, or replace the map, use the sub-resource:
+
+```bash
+unleashed people metadata merge <uuid> --set tier=gold --unset twitter
+unleashed people metadata merge <uuid> --cli-input-json '{"episodes": 3, "vip": true}'
+unleashed people metadata replace <uuid> --set only=this      # every other key is removed
+unleashed people metadata replace <uuid> --cli-input-json '{}' # clear every key
+```
+
+`replace` with no `--set` and no `--cli-input-json` is refused rather than wiping the map.
+
 ### Dry run
 
 Every action takes `--dry-run`, which prints the request with the token redacted and
@@ -254,10 +348,11 @@ unleashed episodes list --query "[].[uuid,name,status]" --output text | column -
 | 1 | Unexpected or transport error |
 | 2 | Usage error, including missing or unreadable configuration |
 | 3 | Validation rejected by the API (422) |
-| 4 | Auth failure (401) |
+| 4 | Auth failure (401), or `login` was denied or failed |
 | 5 | Not found (404) |
 | 6 | Conflict (409) |
 | 7 | Rate limited after retries were exhausted (429) |
+| 8 | Forbidden: the token lacks the ability (403) |
 
 Scripts can branch on these without parsing output.
 

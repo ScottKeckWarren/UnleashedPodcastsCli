@@ -1,10 +1,11 @@
 # Unleashed Podcasts CLI — Product Requirements
 
-**Status:** Draft v0.6 — decisions from rounds 1-5 folded in.
+**Status:** Draft v0.7 — login, short form videos, and people folded in.
 
 ## 1. Problem
 
-UnleashedPodcasts.com exposes a private v1 REST API (`/apiv1`, static bearer token).
+UnleashedPodcasts.com exposes a private v1 REST API (`/apiv1`, bearer token — per-user
+Sanctum tokens, with the legacy static token still accepted).
 Any script, automation, or human who wants to write to it today has to hand-roll HTTP
 calls, auth headers, pagination, and error handling. There is no shared client.
 
@@ -23,47 +24,125 @@ Shipped in milestones, narrowest first.
 | Release | Contents | Blocked on |
 |---------|----------|------------|
 | **v0.1** | All five episode actions, plus full auth: layered config files, named profiles, `unleashed configure`. | — |
-| **v0.2** | `unleashed login` — fetch a token by authenticating, instead of pasting one. | Sanctum token endpoint does not exist. Server work first. |
+| **v0.2** | `unleashed login` and `whoami`; a distinct exit code for 403. **Short form videos** — five actions plus `video-file attach`/`detach`. **People** — five actions plus `metadata merge`/`replace`. | — (done, unreleased) |
 | **v0.3** | Podcasts resource — `podcasts list` / `get`. | `GET /apiv1/podcasts` does not exist. Server work first. |
-| **v0.4** | Ideas resource — five standard actions. | The ideas resource does not exist in the API. Server work first. |
+| **v0.4** | Ideas resource — five standard actions. | Nothing — `/apiv1/ideas` now exists. Needs a manifest. |
 
-Later, unscheduled: the leads resource, a public library API.
+Later, unscheduled:
+
+- **Leads commands.** The manifest exists as a fixture and the API exists; shipping is a
+  one-line change to the shipped list plus tests.
+- **Episode transcript.** A read-only sub-resource (`/episodes/{uuid}/transcript` and
+  `/transcript/utterances`) is in the API.
+- **Person social media.** Needs server work first — see below.
+- A public library API.
 
 Everything below describes the **end state** the milestones build toward, not v0.1.
 
 ### External dependencies
 
-Two milestones depend on API surface that has not been built. Neither is work in this
-repo, and both should start before the CLI milestone that consumes them.
+Some CLI work depends on API surface outside this repo. Server work should start before
+the CLI milestone that consumes it.
 
-**Sanctum token endpoint (blocks v0.2).** See §8.1 for the contract the CLI expects.
-Switching to per-user Sanctum tokens also retires the static shared secret and gives
-`/apiv1` a real user identity — which dissolves the "every episode belongs to one
-configured owner" limit in the current API doc. That is a larger change than the CLI
-work it unblocks.
+**Sanctum token endpoint — shipped.** Built as a browser loopback handshake rather than
+the password exchange first proposed; §8.1 has the contract. Per-user tokens gave
+`/apiv1` a real user identity, so listings are now scoped to the caller rather than to
+one configured owner.
 
 **Podcasts (blocks v0.3).** Needs a read-only resource — `GET /apiv1/podcasts` and
-`GET /apiv1/podcasts/{uuid}`, scoped to the token's configured owner like episodes are.
-Index and show are enough; the CLI has no reason to write podcasts. Until it exists,
-users hand-copy podcast UUIDs out of the web app, which is **accepted through v0.2**.
+`GET /apiv1/podcasts/{uuid}`, scoped to the caller like every other listing. Index and
+show are enough; the CLI has no reason to write podcasts. Until it exists, users
+hand-copy podcast UUIDs out of the web app, which is **accepted through v0.2**.
 
-**Ideas (blocks v0.4).** A new resource, following the API's own "Adding a Resource"
-rules: five standard actions, UUID-addressed, event-sourced, soft delete. Its field
-list is not yet defined. The CLI cannot write its manifest until that field list and
-the relationship between an idea and an episode are settled.
+**Ideas — shipped in the API.** `/apiv1/ideas` has its five standard actions. v0.4 is
+now CLI-only work: a manifest and tests.
 
-The API doc is the contract for both. When each ships, this CLI needs only a new
-manifest — no generator changes.
+**Person social media (unscheduled).** The web app stores a person's social accounts
+(`person_social_media`: platform, URL, username), but only web controllers use them —
+the API's `PersonResource` omits them and there is no endpoint to write them. The CLI
+needs three things before it can cover this: the accounts on the person read, a
+child-collection endpoint (e.g. `GET`/`POST /people/{uuid}/social-media`, `DELETE
+/people/{uuid}/social-media/{uuid}`), and a platform list or enum to validate against.
+Until then, handles can go in person metadata, but they do not appear in the web app's
+social section or on the public profile.
+
+The API doc (`/apiv1/docs.json`) is the contract. When an endpoint ships, this CLI needs
+a new manifest and no generator changes — unless the resource introduces a shape the
+generator has never seen. That happened twice in v0.2 (attachments and key-value maps,
+§7); each was a one-time, resource-agnostic addition.
+
+### Endpoint coverage
+
+Every operation in `/apiv1/docs.json` as of 2026-09-22, and whether the CLI covers it.
+The API accepts both `PUT` and `PATCH` on a record, with identical behavior. The CLI's
+`update` always sends `PATCH`, so the `PUT` rows are covered by that command.
+
+| Method | Path | Supported | CLI command / reason |
+|--------|------|-----------|----------------------|
+| POST | `/apiv1/cli/token` | ✅ Yes | `login` (code exchange step) |
+| GET | `/apiv1/whoami` | ✅ Yes | `whoami` |
+| GET | `/apiv1/episodes` | ✅ Yes | `episodes list` |
+| POST | `/apiv1/episodes` | ✅ Yes | `episodes create` |
+| GET | `/apiv1/episodes/{uuid}` | ✅ Yes | `episodes get` |
+| PUT | `/apiv1/episodes/{uuid}` | ✅ Yes | `episodes update` (sends PATCH) |
+| PATCH | `/apiv1/episodes/{uuid}` | ✅ Yes | `episodes update` |
+| DELETE | `/apiv1/episodes/{uuid}` | ✅ Yes | `episodes delete` |
+| GET | `/apiv1/episodes/{uuid}/transcript` | ❌ No | Unscheduled. Read-only sub-resource; needs a new manifest shape |
+| GET | `/apiv1/episodes/{uuid}/transcript/utterances` | ❌ No | Unscheduled. Paginated child listing of the transcript |
+| GET | `/apiv1/short-form-videos` | ✅ Yes | `short-form-videos list` |
+| POST | `/apiv1/short-form-videos` | ✅ Yes | `short-form-videos create` |
+| GET | `/apiv1/short-form-videos/{uuid}` | ✅ Yes | `short-form-videos get` |
+| PUT | `/apiv1/short-form-videos/{uuid}` | ✅ Yes | `short-form-videos update` (sends PATCH) |
+| PATCH | `/apiv1/short-form-videos/{uuid}` | ✅ Yes | `short-form-videos update` |
+| DELETE | `/apiv1/short-form-videos/{uuid}` | ✅ Yes | `short-form-videos delete` |
+| PUT | `/apiv1/short-form-videos/{uuid}/video-file` | ✅ Yes | `short-form-videos video-file attach` |
+| DELETE | `/apiv1/short-form-videos/{uuid}/video-file` | ✅ Yes | `short-form-videos video-file detach` |
+| GET | `/apiv1/people` | ✅ Yes | `people list` |
+| POST | `/apiv1/people` | ✅ Yes | `people create` |
+| GET | `/apiv1/people/{uuid}` | ✅ Yes | `people get` |
+| PUT | `/apiv1/people/{uuid}` | ✅ Yes | `people update` (sends PATCH) |
+| PATCH | `/apiv1/people/{uuid}` | ✅ Yes | `people update` |
+| DELETE | `/apiv1/people/{uuid}` | ✅ Yes | `people delete` |
+| PATCH | `/apiv1/people/{uuid}/metadata` | ✅ Yes | `people metadata merge` |
+| PUT | `/apiv1/people/{uuid}/metadata` | ✅ Yes | `people metadata replace` |
+| GET | `/apiv1/ideas` | ❌ No | v0.4. API exists; needs a manifest |
+| POST | `/apiv1/ideas` | ❌ No | v0.4 |
+| GET | `/apiv1/ideas/{uuid}` | ❌ No | v0.4 |
+| PUT | `/apiv1/ideas/{uuid}` | ❌ No | v0.4 |
+| PATCH | `/apiv1/ideas/{uuid}` | ❌ No | v0.4 |
+| DELETE | `/apiv1/ideas/{uuid}` | ❌ No | v0.4 |
+| GET | `/apiv1/leads` | ❌ No | Unscheduled. Manifest exists as a test fixture; not shipped |
+| POST | `/apiv1/leads` | ❌ No | Unscheduled. Also takes a batch, answered with 207 Multi-Status |
+| GET | `/apiv1/leads/{uuid}` | ❌ No | Unscheduled |
+| PUT | `/apiv1/leads/{uuid}` | ❌ No | Unscheduled |
+| PATCH | `/apiv1/leads/{uuid}` | ❌ No | Unscheduled |
+| DELETE | `/apiv1/leads/{uuid}` | ❌ No | Unscheduled |
+| POST | `/api/files/presigned-upload-url` | ❌ No | Non-goal (§4). Uses the browser session cookie, not a bearer token |
+| POST | `/api/files/upload-complete` | ❌ No | Non-goal (§4). Uses the browser session cookie |
+
+**Totals:** 24 of 40 operations supported. Of the 16 that aren't: 6 ideas (v0.4),
+6 leads (unscheduled), 2 transcript (unscheduled), and 2 file uploads (non-goal).
+
+The CLI also needs endpoints that `docs.json` doesn't list yet:
+
+- `GET /apiv1/podcasts` and `GET /apiv1/podcasts/{uuid}` — v0.3.
+- Person social media — unscheduled, see above.
+
+`login` also calls the web route `/cli/authorize`, which serves the browser approval
+page. It isn't part of `/apiv1`, so it isn't in the table.
 
 ## 4. Non-Goals
 
 - No coverage of the session-cookie upload endpoints (`/api/files/*`) — browser-only surface.
+  `short-form-videos video-file attach` takes the UUID of a file already uploaded in
+  the web app; the CLI never uploads.
 - No local caching, sync, or offline mode.
 - No interactive TUI / wizard.
 - No API versions other than v1 (there is no v2).
 - **No public Python library API.** The package is a CLI. Internal client classes are
-  unstable and may change in any release. Public library support is revisited once the
-  manifest abstraction has been tested against a second resource.
+  unstable and may change in any release. The manifest abstraction now carries three
+  shipped resources and a fixture, so public library support is due for a revisit — but
+  it stays a non-goal until that decision is made.
 
 ## 5. Users
 
@@ -84,11 +163,20 @@ unleashed episodes get <uuid>
 unleashed episodes update <uuid> --status Published --is-published
 unleashed episodes update <uuid> --clear-description
 unleashed episodes delete <uuid>
+
+unleashed short-form-videos video-file attach <uuid> --file-uuid ...
+unleashed people metadata merge <uuid> --set tier=gold --unset twitter
+
+unleashed login
+unleashed whoami
 ```
 
 Principles, mirroring the API's own conventions:
 
-- **Five actions per resource:** `list`, `create`, `get`, `update`, `delete`. No ad-hoc verbs.
+- **Five actions per resource:** `list`, `create`, `get`, `update`, `delete`.
+- **Sub-resources nest as their own noun:** `unleashed <resource> <sub-resource> <verb>`.
+  Each kind of sub-resource has a fixed pair of verbs — `attach`/`detach` for a linked
+  record, `merge`/`replace` for a key-value map. Never a one-off verb for one resource.
 - **One flag per writable API field**, kebab-cased. Filters and sorts are flags on `list`.
 - **`--cli-input-json`** accepts a JSON object (or list, where bulk create is supported)
   as an alternative to flags.
@@ -130,12 +218,42 @@ Field attributes carry real consequences:
 - `immutable=True` — flag exists on `create`, absent from `update`.
 - `nullable=True` — generates a paired `--clear-<field>` flag (see §9).
 - `required_on_create=True` — enforced locally before the request is sent.
+- `type=MAP` — a repeatable `--<field> KEY=VALUE` flag, assembled into an object.
+  Values are sent as strings; typed values go through `--cli-input-json`.
+
+Beyond fields, a resource can declare sub-resources and help-text wording:
+
+- **`Attachment(name, id_field)`** — a singular linked record.
+  `PUT /<resource>/<uuid>/<name>` with `{<id_field>: ...}` becomes `attach`, replacing
+  whatever was attached; `DELETE` on the same path becomes `detach`.
+- **`KeyValueMap(name)`** — a flat map of scalars. `PATCH` becomes `merge` (`--set
+  KEY=VALUE`, `--unset KEY` sends null to delete it); `PUT` becomes `replace` (`--set`
+  only). Both accept `--cli-input-json`, validated locally as a flat object of scalars.
+  `replace` with nothing to send is refused rather than wiping the map; clearing it is
+  an explicit `--cli-input-json '{}'`.
+- **`singular_name`** — for names that do not singularise by dropping an `s`, so help
+  reads "Create one person."
+
+```python
+PEOPLE = Resource(
+    name="people",
+    fields=[
+        Field("name", required_on_create=True),
+        Field("email", nullable=True),
+        Field("last_outreach", type=DATE),          # cannot be cleared once set
+        Field("metadata", type=MAP),
+        ...
+    ],
+    maps=[KeyValueMap("metadata")],
+    singular_name="person",
+)
+```
 
 **Nothing in the generator may reference a specific resource.** Anything resource-specific
 belongs in that resource's manifest. This mirrors the API's own "Adding a Resource" rule.
 
-A **leads manifest is written in v0.1 as a test fixture**, with no shipped commands. Two
-manifests exercise the abstraction while the release surface stays narrow.
+Shipped manifests: **episodes**, **short-form-videos**, **people**. A **leads manifest**
+exists as a test fixture with no shipped commands.
 
 ## 8. Configuration and Auth
 
@@ -178,34 +296,44 @@ profile names the profiles that do exist.
 
 ### 8.1 Fetching a token (v0.2)
 
-Today a token is minted by hand and pasted into `configure`. v0.2 adds `unleashed login`,
-which authenticates and stores the token itself.
+`unleashed login` fetches a token and stores it, so nobody pastes one into `configure`.
+`configure` remains for CI and for the legacy static token.
 
-The server side follows Laravel Sanctum's **mobile application authentication** flow.
-The CLI is, for this purpose, a mobile app: it holds a long-lived personal access token
-and sends it as a bearer token.
+The server issues Sanctum personal access tokens through a **browser loopback
+handshake**, the same shape as OAuth's PKCE flow. There is no password prompt.
 
 ```
-POST <token endpoint>
-{ "email": "...", "password": "...", "device_name": "scott-macbook" }
-
-200
-7|Abc123...
+1. CLI invents a verifier and a state, listens on http://127.0.0.1:<port>/callback
+2. CLI opens <site>/cli/authorize?state=..&verifier_hash=<sha256 hex>
+       &redirect_uri=..&device_name=..&abilities[]=..
+3. User approves; the site redirects to redirect_uri?code=..&state=..
+4. POST /apiv1/cli/token { "code": "..", "verifier": ".." }
+   200 { "token": "7|Abc123...", "token_type": "Bearer" }
+   400 on any failure — invalid, expired (2 min), reused, or wrong verifier
 ```
 
-- **The response body is the token, as a bare string** — Laravel's documented example.
-  The CLI reads the whole body. Because a bare string cannot be distinguished from an
-  error page, the CLI validates the body against Sanctum's `{id}|{40 chars}` shape
-  before writing it anywhere. A body that does not match is an error, never a stored
-  token.
+- **The token never passes through the browser.** The browser carries only the
+  one-use code, which is useless without the verifier held in the CLI process.
+- **The state must match** or the redirect is rejected and nothing is written.
+- **`<site>` is derived from `api_url`** by stripping `/apiv1`, so one base URL in the
+  config still covers both the approval page and the API.
+- **Abilities** default to every one the site grants (`episodes:read`,
+  `episodes:write`, `leads:read`, `leads:write`); `--ability` narrows the request. A
+  missing ability is a 403, reported with its own exit code (8).
+- **`api_url`** comes from `--api-url`, then the selected profile's existing value, then
+  `UNLEASHED_API_URL`, then production.
+- **The CLI waits five minutes** for the browser, long enough to sign in first. The
+  code itself expires two minutes after approval. `--no-browser` prints the approval
+  URL instead of opening it.
+- **Short form videos and people need no ability** — any valid token reaches them.
+- **`unleashed whoami`** shows the user, device name, and abilities behind the current
+  token, for checking which account a profile points at.
 - **`device_name`** defaults to the machine's hostname and is overridable with
   `--device-name`. It is what the user sees in the web app's revoke list, so it must be
   recognisable.
 - **The token is stored in the ordinary config file**, as `api_token` in the selected
   profile — the same file, permissions, profile selection, and local-override rules
   that already exist. `login` is `configure` with the token filled in automatically.
-- **There is no `--password` flag.** The prompt hides input. A password in argv reaches
-  shell history and the process table.
 - **Static tokens keep working.** The CLI sends whatever `api_token` holds and never
   inspects it at request time. A hand-minted shared secret and a Sanctum personal access
   token are indistinguishable to the client, so existing v0.1 automation keeps running
@@ -235,6 +363,11 @@ distinction impossible to trip over.
 - `--clear-<field>` is generated only for fields the manifest marks `nullable=True`.
 
 No sentinel values. `--description null` sends the literal string `"null"`.
+
+- A field the API will not clear (people's `last_outreach`) is not `nullable`, so it has
+  no `--clear-` flag.
+- A `MAP` field on `update` merges into the existing keys, because the API merges. To
+  delete a key, use the map sub-resource: `<resource> <map> merge --unset KEY`.
 
 ## 10. Output
 
@@ -267,10 +400,13 @@ No sentinel values. `--description null` sends the literal string `"null"`.
 | 1 | Unexpected / client error |
 | 2 | Usage error (bad flags, conflicting flags) |
 | 3 | Validation rejected by API (422) |
-| 4 | Auth failure (401) |
+| 4 | Auth failure (401); `login` denied, timed out, or its code exchange failed |
 | 5 | Not found (404) |
 | 6 | Conflict (409) |
 | 7 | Rate limited after retries exhausted (429) |
+| 8 | Forbidden: the token lacks the ability the route needs (403) |
+
+A 401 or 403 also prints a hint to run `unleashed login`.
 
 ## 13. Technology
 
@@ -309,26 +445,38 @@ Python-friendly and the CLI ecosystem is mature. Tradeoff accepted: distribution
 
 ## 16. Open Questions
 
-1. **The token endpoint's path.** Laravel's example uses `/sanctum/token`, outside
-   `/apiv1`. Putting it at `/apiv1/tokens` keeps one base URL in the config file;
-   anywhere else means the CLI must derive a second URL from the first.
-2. **Token abilities.** Sanctum supports scopes. Does a CLI token get `*`, or a
-   narrower set? If narrower, the CLI needs to report a 403 distinctly from a 401.
-3. **Does per-user identity change episode scoping?** The current doc scopes every
-   episode to one configured owner because the token has no user. Once it does, that
-   paragraph needs rewriting — and `podcast_uuid` validation changes with it.
-4. **Ideas field list.** Confirmed as a new API resource, but its fields, its enum
-   values, and its relationship to an episode are undefined. Needed before the v0.4
-   manifest can be written.
-5. **Who builds the token, podcasts, and ideas endpoints, and when?** All three are
-   outside this repo (see §3). v0.2, v0.3, and v0.4 each wait on one of them.
+Resolved:
+
+1. ~~The token endpoint's path.~~ `POST /apiv1/cli/token`, inside `/apiv1`. The approval
+   page lives on the site; the CLI derives it from `api_url` by stripping `/apiv1`.
+2. ~~Token abilities.~~ A closed list (`episodes:read|write`, `leads:read|write`), never
+   a wildcard. A 403 is reported distinctly, with exit code 8.
+3. ~~Does per-user identity change episode scoping?~~ Yes — every listing is now scoped
+   to the caller.
+4. ~~Ideas field list.~~ Defined in `/apiv1/docs.json`.
+
+Open:
+
+5. **Who builds the podcasts endpoint, and when?** The only server dependency still
+   blocking a numbered milestone (v0.3).
 6. Does `episodes create` want a friendlier error when `--podcast-uuid` is wrong?
    The API returns 422 on the podcast field; the CLI could add "run `unleashed podcasts
    list`" to that message — but only once v0.3 exists.
+7. **Should short form videos and people get their own abilities?** Today any valid
+   token reaches them, so `--ability` cannot narrow a token away from them.
+8. **Typed metadata values from flags.** `--set count=3` sends the string `"3"`. Guessing
+   types would break values like zip codes (`02134`); typed values currently need
+   `--cli-input-json`. Is that good enough, or does it want an explicit typed flag?
+9. **Person social media endpoint** — design and ownership (see §3).
+10. **A friendlier missing-profile error.** With no `[default]` section, the error names
+    the missing `api_url` but not the profiles that do exist (hit during local testing
+    after `login --profile local`). It should list them, as the explicit-profile error does.
 
 ## 17. Success Criteria
 
 1. An external workflow can create an episode with one non-interactive command. *(v0.1)*
 2. Adding a new API resource takes a manifest declaration and no generator changes.
+   Met for short form videos and people; the new shapes they introduced (attachments,
+   key-value maps) were one-time, resource-agnostic generator additions.
 3. Coverage stays above 90% on `main` continuously.
 4. A stranger can install and make their first successful call from the README alone.

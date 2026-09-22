@@ -19,6 +19,7 @@ class FieldType(StrEnum):
     DATE = "date"
     BOOL = "bool"
     INT = "int"
+    MAP = "map"
 
 
 @dataclass(frozen=True)
@@ -79,11 +80,46 @@ class Filter:
 
 
 @dataclass(frozen=True)
+class Attachment:
+    """A singular sub-resource that links one existing record to the parent.
+
+    PUT /<resource>/<uuid>/<name> with {<id_field>: ...} attaches, replacing whatever
+    was attached before. DELETE on the same path detaches. It becomes a nested
+    `<resource> <name> attach|detach` group — still noun verb, never an ad-hoc verb.
+    """
+
+    name: str
+    id_field: str
+    help: str = ""
+
+    @property
+    def id_flag_name(self) -> str:
+        return "--" + self.id_field.replace("_", "-")
+
+
+@dataclass(frozen=True)
+class KeyValueMap:
+    """A flat map sub-resource the API merges into or replaces wholesale.
+
+    PATCH /<resource>/<uuid>/<name> merges: keys sent overwrite, a null deletes one,
+    keys not sent are kept. PUT replaces the whole map. It becomes a nested
+    `<resource> <name> merge|replace` group.
+    """
+
+    name: str
+    help: str = ""
+
+
+@dataclass(frozen=True)
 class Resource:
     name: str
     fields: tuple[Field, ...] | list[Field]
     filters: tuple[Filter, ...] | list[Filter] = dataclass_field(default_factory=tuple)
     sorts: tuple[str, ...] | list[str] = dataclass_field(default_factory=tuple)
+    attachments: tuple[Attachment, ...] | list[Attachment] = dataclass_field(default_factory=tuple)
+    maps: tuple[KeyValueMap, ...] | list[KeyValueMap] = dataclass_field(default_factory=tuple)
+    #: For names that do not singularise by dropping an s, such as people.
+    singular_name: str | None = None
 
     def __post_init__(self) -> None:
         names = [f.name for f in self.fields]
@@ -95,6 +131,14 @@ class Resource:
             raise ManifestError(
                 f"{self.name} allows a sort on {unknown_sorts}, which are not fields."
             )
+        nested = [a.name for a in self.attachments] + [m.name for m in self.maps]
+        clashing = {n for n in nested if nested.count(n) > 1}
+        if clashing:
+            raise ManifestError(f"{self.name} declares duplicate sub-resources: {sorted(clashing)}")
+
+    @property
+    def singular(self) -> str:
+        return self.singular_name or self.name.rstrip("s").replace("-", " ")
 
     def field(self, name: str) -> Field:
         for candidate in self.fields:
