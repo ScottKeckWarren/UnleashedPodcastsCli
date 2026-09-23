@@ -5,7 +5,12 @@
 ```bash
 uv sync
 uv run pytest
+make install-hooks    # run `make pre-commit` before every commit
 ```
+
+`make pre-commit` runs exactly what CI runs: `ruff check .`, `ruff format --check .`,
+`mypy`, and `pytest` with the coverage gate. Note that `ruff format` also checks Python
+code blocks inside Markdown files such as `PRD.md`.
 
 ## The two rules
 
