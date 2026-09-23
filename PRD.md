@@ -240,9 +240,9 @@ PEOPLE = Resource(
     fields=[
         Field("name", required_on_create=True),
         Field("email", nullable=True),
-        Field("last_outreach", type=DATE),          # cannot be cleared once set
+        Field("last_outreach", type=DATE),  # cannot be cleared once set
         Field("metadata", type=MAP),
-        ...
+        # bio, plus the read-only uuid, is_public, and timestamps
     ],
     maps=[KeyValueMap("metadata")],
     singular_name="person",
