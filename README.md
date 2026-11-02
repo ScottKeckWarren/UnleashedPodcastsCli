@@ -4,7 +4,7 @@ A command-line interface for the [UnleashedPodcasts.com](https://unleashedpodcas
 private v1 API, shaped like the AWS CLI: predictable `noun verb` commands, credentials
 from the environment, JSON in and JSON out.
 
-**Status: episodes, short form videos, and people, plus `login`, `whoami`, and `configure`.** See [PRD.md](PRD.md) for the roadmap.
+**Status: episodes, short form videos, people, and ideas, plus `login`, `whoami`, and `configure`.** See [PRD.md](PRD.md) for the roadmap.
 
 ## Install
 
@@ -324,6 +324,22 @@ Content-Type: application/json
   "target_published_date": "2026-09-15"
 }
 ```
+
+## Ideas
+
+The episode-idea backlog. The podcast is optional; an idea without one sits in the
+general backlog.
+
+```bash
+unleashed ideas create --title "Interview a sound engineer" --podcast-uuid <uuid>
+unleashed ideas list --status open --unassigned --sort position
+unleashed ideas get <uuid>
+unleashed ideas update <uuid> --status converted --converted-episode-uuid <episode-uuid>
+unleashed ideas delete <uuid>
+```
+
+`--status` and `--converted-episode-uuid` exist only on `update`, and the API accepts a
+converted episode only alongside `--status converted`.
 
 ## Output
 

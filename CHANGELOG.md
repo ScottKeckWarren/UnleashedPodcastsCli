@@ -8,6 +8,7 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- `ideas` — all five standard actions, generated from a manifest.
 - `unleashed login` — approve the CLI in a browser and save the personal access token
   it is issued. Loopback redirect to 127.0.0.1 plus a code-and-verifier exchange, so
   the token never passes through the browser. `--ability`, `--device-name`,
