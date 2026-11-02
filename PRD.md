@@ -26,7 +26,7 @@ Shipped in milestones, narrowest first.
 | **v0.1** | All five episode actions, plus full auth: layered config files, named profiles, `unleashed configure`. | — |
 | **v0.2** | `unleashed login` and `whoami`; a distinct exit code for 403. **Short form videos** — five actions plus `video-file attach`/`detach`. **People** — five actions plus `metadata merge`/`replace`. | — (done, unreleased) |
 | **v0.3** | Podcasts resource — `podcasts list` / `get`. | `GET /apiv1/podcasts` does not exist. Server work first. |
-| **v0.4** | Ideas resource — five standard actions. | Nothing — `/apiv1/ideas` now exists. Needs a manifest. |
+| **v0.4** | **Ideas** — five standard actions. | — (in progress) |
 
 Later, unscheduled:
 
@@ -54,8 +54,7 @@ one configured owner.
 show are enough; the CLI has no reason to write podcasts. Until it exists, users
 hand-copy podcast UUIDs out of the web app, which is **accepted through v0.2**.
 
-**Ideas — shipped in the API.** `/apiv1/ideas` has its five standard actions. v0.4 is
-now CLI-only work: a manifest and tests.
+**Ideas — shipped in the API and the CLI (v0.4).**
 
 **Person social media (unscheduled).** The web app stores a person's social accounts
 (`person_social_media`: platform, URL, username), but only web controllers use them —
@@ -105,12 +104,12 @@ The API accepts both `PUT` and `PATCH` on a record, with identical behavior. The
 | DELETE | `/apiv1/people/{uuid}` | ✅ Yes | `people delete` |
 | PATCH | `/apiv1/people/{uuid}/metadata` | ✅ Yes | `people metadata merge` |
 | PUT | `/apiv1/people/{uuid}/metadata` | ✅ Yes | `people metadata replace` |
-| GET | `/apiv1/ideas` | ❌ No | v0.4. API exists; needs a manifest |
-| POST | `/apiv1/ideas` | ❌ No | v0.4 |
-| GET | `/apiv1/ideas/{uuid}` | ❌ No | v0.4 |
-| PUT | `/apiv1/ideas/{uuid}` | ❌ No | v0.4 |
-| PATCH | `/apiv1/ideas/{uuid}` | ❌ No | v0.4 |
-| DELETE | `/apiv1/ideas/{uuid}` | ❌ No | v0.4 |
+| GET | `/apiv1/ideas` | ✅ Yes | `ideas list` |
+| POST | `/apiv1/ideas` | ✅ Yes | `ideas create` |
+| GET | `/apiv1/ideas/{uuid}` | ✅ Yes | `ideas get` |
+| PUT | `/apiv1/ideas/{uuid}` | ✅ Yes | `ideas update` (sends PATCH) |
+| PATCH | `/apiv1/ideas/{uuid}` | ✅ Yes | `ideas update` |
+| DELETE | `/apiv1/ideas/{uuid}` | ✅ Yes | `ideas delete` |
 | GET | `/apiv1/leads` | ❌ No | Unscheduled. Manifest exists as a test fixture; not shipped |
 | POST | `/apiv1/leads` | ❌ No | Unscheduled. Also takes a batch, answered with 207 Multi-Status |
 | GET | `/apiv1/leads/{uuid}` | ❌ No | Unscheduled |
@@ -120,8 +119,8 @@ The API accepts both `PUT` and `PATCH` on a record, with identical behavior. The
 | POST | `/api/files/presigned-upload-url` | ❌ No | Non-goal (§4). Uses the browser session cookie, not a bearer token |
 | POST | `/api/files/upload-complete` | ❌ No | Non-goal (§4). Uses the browser session cookie |
 
-**Totals:** 24 of 40 operations supported. Of the 16 that aren't: 6 ideas (v0.4),
-6 leads (unscheduled), 2 transcript (unscheduled), and 2 file uploads (non-goal).
+**Totals:** 30 of 40 operations supported. Of the 10 that aren't: 6 leads
+(unscheduled), 2 transcript (unscheduled), and 2 file uploads (non-goal).
 
 The CLI also needs endpoints that `docs.json` doesn't list yet:
 
@@ -252,7 +251,7 @@ PEOPLE = Resource(
 **Nothing in the generator may reference a specific resource.** Anything resource-specific
 belongs in that resource's manifest. This mirrors the API's own "Adding a Resource" rule.
 
-Shipped manifests: **episodes**, **short-form-videos**, **people**. A **leads manifest**
+Shipped manifests: **episodes**, **short-form-videos**, **people**, **ideas**. A **leads manifest**
 exists as a test fixture with no shipped commands.
 
 ## 8. Configuration and Auth
@@ -325,7 +324,7 @@ handshake**, the same shape as OAuth's PKCE flow. There is no password prompt.
 - **The CLI waits five minutes** for the browser, long enough to sign in first. The
   code itself expires two minutes after approval. `--no-browser` prints the approval
   URL instead of opening it.
-- **Short form videos and people need no ability** — any valid token reaches them.
+- **Short form videos, people, and ideas need no ability** — any valid token reaches them.
 - **`unleashed whoami`** shows the user, device name, and abilities behind the current
   token, for checking which account a profile points at.
 - **`device_name`** defaults to the machine's hostname and is overridable with
