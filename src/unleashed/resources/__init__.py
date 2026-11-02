@@ -5,6 +5,7 @@ from unleashed.resources.episodes import EPISODES
 from unleashed.resources.ideas import IDEAS
 from unleashed.resources.people import PEOPLE
 from unleashed.resources.short_form_videos import SHORT_FORM_VIDEOS
+from unleashed.resources.tasks import TASKS
 
 #: Resources whose commands ship today. Leads has a manifest but no commands yet.
-SHIPPED: tuple[Resource, ...] = (EPISODES, SHORT_FORM_VIDEOS, PEOPLE, IDEAS)
+SHIPPED: tuple[Resource, ...] = (EPISODES, SHORT_FORM_VIDEOS, PEOPLE, IDEAS, TASKS)
