@@ -26,7 +26,7 @@ Shipped in milestones, narrowest first.
 | **v0.1** | All five episode actions, plus full auth: layered config files, named profiles, `unleashed configure`. | — |
 | **v0.2** | `unleashed login` and `whoami`; a distinct exit code for 403. **Short form videos** — five actions plus `video-file attach`/`detach`. **People** — five actions plus `metadata merge`/`replace`. | — (done, unreleased) |
 | **v0.3** | Podcasts resource — `podcasts list` / `get`. | `GET /apiv1/podcasts` does not exist. Server work first. |
-| **v0.4** | **Ideas** — five standard actions. | — (in progress) |
+| **v0.4** | **Ideas** and **tasks** — five standard actions each. | — (in progress) |
 
 Later, unscheduled:
 
@@ -54,7 +54,7 @@ one configured owner.
 show are enough; the CLI has no reason to write podcasts. Until it exists, users
 hand-copy podcast UUIDs out of the web app, which is **accepted through v0.2**.
 
-**Ideas — shipped in the API and the CLI (v0.4).**
+**Ideas and tasks — shipped in the API and the CLI (v0.4).**
 
 **Person social media (unscheduled).** The web app stores a person's social accounts
 (`person_social_media`: platform, URL, username), but only web controllers use them —
@@ -72,7 +72,7 @@ generator has never seen. That happened twice in v0.2 (attachments and key-value
 
 ### Endpoint coverage
 
-Every operation in `/apiv1/docs.json` as of 2026-09-22, and whether the CLI covers it.
+Every operation in `/apiv1/docs.json` as of 2026-11-02, and whether the CLI covers it.
 The API accepts both `PUT` and `PATCH` on a record, with identical behavior. The CLI's
 `update` always sends `PATCH`, so the `PUT` rows are covered by that command.
 
@@ -110,6 +110,12 @@ The API accepts both `PUT` and `PATCH` on a record, with identical behavior. The
 | PUT | `/apiv1/ideas/{uuid}` | ✅ Yes | `ideas update` (sends PATCH) |
 | PATCH | `/apiv1/ideas/{uuid}` | ✅ Yes | `ideas update` |
 | DELETE | `/apiv1/ideas/{uuid}` | ✅ Yes | `ideas delete` |
+| GET | `/apiv1/tasks` | ✅ Yes | `tasks list` |
+| POST | `/apiv1/tasks` | ✅ Yes | `tasks create` |
+| GET | `/apiv1/tasks/{uuid}` | ✅ Yes | `tasks get` |
+| PUT | `/apiv1/tasks/{uuid}` | ✅ Yes | `tasks update` (sends PATCH) |
+| PATCH | `/apiv1/tasks/{uuid}` | ✅ Yes | `tasks update` |
+| DELETE | `/apiv1/tasks/{uuid}` | ✅ Yes | `tasks delete` |
 | GET | `/apiv1/leads` | ❌ No | Unscheduled. Manifest exists as a test fixture; not shipped |
 | POST | `/apiv1/leads` | ❌ No | Unscheduled. Also takes a batch, answered with 207 Multi-Status |
 | GET | `/apiv1/leads/{uuid}` | ❌ No | Unscheduled |
@@ -119,7 +125,7 @@ The API accepts both `PUT` and `PATCH` on a record, with identical behavior. The
 | POST | `/api/files/presigned-upload-url` | ❌ No | Non-goal (§4). Uses the browser session cookie, not a bearer token |
 | POST | `/api/files/upload-complete` | ❌ No | Non-goal (§4). Uses the browser session cookie |
 
-**Totals:** 30 of 40 operations supported. Of the 10 that aren't: 6 leads
+**Totals:** 36 of 46 operations supported. Of the 10 that aren't: 6 leads
 (unscheduled), 2 transcript (unscheduled), and 2 file uploads (non-goal).
 
 The CLI also needs endpoints that `docs.json` doesn't list yet:
@@ -251,7 +257,7 @@ PEOPLE = Resource(
 **Nothing in the generator may reference a specific resource.** Anything resource-specific
 belongs in that resource's manifest. This mirrors the API's own "Adding a Resource" rule.
 
-Shipped manifests: **episodes**, **short-form-videos**, **people**, **ideas**. A **leads manifest**
+Shipped manifests: **episodes**, **short-form-videos**, **people**, **ideas**, **tasks**. A **leads manifest**
 exists as a test fixture with no shipped commands.
 
 ## 8. Configuration and Auth
@@ -317,7 +323,8 @@ handshake**, the same shape as OAuth's PKCE flow. There is no password prompt.
 - **`<site>` is derived from `api_url`** by stripping `/apiv1`, so one base URL in the
   config still covers both the approval page and the API.
 - **Abilities** default to every one the site grants (`episodes:read`,
-  `episodes:write`, `leads:read`, `leads:write`); `--ability` narrows the request. A
+  `episodes:write`, `leads:read`, `leads:write`, `tasks:read`, `tasks:write`);
+  `--ability` narrows the request. A
   missing ability is a 403, reported with its own exit code (8).
 - **`api_url`** comes from `--api-url`, then the selected profile's existing value, then
   `UNLEASHED_API_URL`, then production.
@@ -448,7 +455,7 @@ Resolved:
 
 1. ~~The token endpoint's path.~~ `POST /apiv1/cli/token`, inside `/apiv1`. The approval
    page lives on the site; the CLI derives it from `api_url` by stripping `/apiv1`.
-2. ~~Token abilities.~~ A closed list (`episodes:read|write`, `leads:read|write`), never
+2. ~~Token abilities.~~ A closed list (`episodes:read|write`, `leads:read|write`, `tasks:read|write`), never
    a wildcard. A 403 is reported distinctly, with exit code 8.
 3. ~~Does per-user identity change episode scoping?~~ Yes — every listing is now scoped
    to the caller.
