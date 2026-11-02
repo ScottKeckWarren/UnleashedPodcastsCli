@@ -32,7 +32,14 @@ from unleashed.errors import ApiError, AuthError, UnleashedError, error_for_stat
 DEFAULT_API_URL = "https://unleashedpodcasts.com/apiv1"
 
 #: Every ability the site grants. The server rejects a request naming anything else.
-ABILITIES = ("episodes:read", "episodes:write", "leads:read", "leads:write")
+ABILITIES = (
+    "episodes:read",
+    "episodes:write",
+    "leads:read",
+    "leads:write",
+    "tasks:read",
+    "tasks:write",
+)
 
 #: How long to wait for the browser. The server's code lives two minutes after approval,
 #: but signing in first can take a while.

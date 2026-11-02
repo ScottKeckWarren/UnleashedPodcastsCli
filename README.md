@@ -4,7 +4,7 @@ A command-line interface for the [UnleashedPodcasts.com](https://unleashedpodcas
 private v1 API, shaped like the AWS CLI: predictable `noun verb` commands, credentials
 from the environment, JSON in and JSON out.
 
-**Status: episodes, short form videos, people, and ideas, plus `login`, `whoami`, and `configure`.** See [PRD.md](PRD.md) for the roadmap.
+**Status: episodes, short form videos, people, ideas, and tasks, plus `login`, `whoami`, and `configure`.** See [PRD.md](PRD.md) for the roadmap.
 
 ## Install
 
@@ -340,6 +340,20 @@ unleashed ideas delete <uuid>
 
 `--status` and `--converted-episode-uuid` exist only on `update`, and the API accepts a
 converted episode only alongside `--status converted`.
+
+## Tasks
+
+Your own tasks, optionally tied to an episode. These routes need the `tasks:read` and
+`tasks:write` abilities; a token issued before they existed exits `8` — run
+`unleashed login` again.
+
+```bash
+unleashed tasks create --title "Book the guest" --due-date 2026-11-10 --episode-uuid <uuid>
+unleashed tasks list --status todo --sort due_date
+unleashed tasks get <uuid>
+unleashed tasks update <uuid> --status completed --clear-due-date
+unleashed tasks delete <uuid>
+```
 
 ## Output
 
