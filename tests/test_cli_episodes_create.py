@@ -3,6 +3,7 @@ import json
 import httpx
 import respx
 
+from unleashed import __version__
 from unleashed.cli import cli
 from unleashed.errors import ExitCode
 
@@ -200,7 +201,7 @@ def test_dry_run_still_requires_configuration(runner, env):
 def test_the_version_flag_reports_a_version(runner, env):
     result = runner.invoke(cli, ["--version"], env=env)
     assert result.exit_code == ExitCode.SUCCESS
-    assert "0.1.0" in result.output
+    assert __version__ in result.output
 
 
 def test_all_five_standard_actions_are_exposed(runner, env):

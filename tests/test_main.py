@@ -3,6 +3,7 @@
 import httpx
 import respx
 
+from unleashed import __version__
 from unleashed.cli import main
 from unleashed.errors import ExitCode
 
@@ -77,4 +78,12 @@ def test_main_reports_an_abort_as_a_generic_error(env, monkeypatch, capsys):
 
 def test_the_version_option_reports_the_package_version(env, capsys):
     assert main(["--version"], env=env) == ExitCode.SUCCESS
-    assert "0.1.0" in capsys.readouterr().out
+    assert __version__ in capsys.readouterr().out
+
+
+def test_the_package_version_matches_pyproject():
+    import tomllib
+    from pathlib import Path
+
+    pyproject = Path(__file__).resolve().parent.parent / "pyproject.toml"
+    assert tomllib.loads(pyproject.read_text())["project"]["version"] == __version__

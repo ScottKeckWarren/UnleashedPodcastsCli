@@ -1,6 +1,6 @@
 [project]
 name = "unleashed-podcasts-cli"
-version = "0.1.0"
+version = "0.4.0"
 description = "Command-line interface for the UnleashedPodcasts.com private v1 API"
 readme = "README.md"
 requires-python = ">=3.11"
