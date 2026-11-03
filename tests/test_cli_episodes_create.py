@@ -209,11 +209,6 @@ def test_all_five_standard_actions_are_exposed(runner, env):
         assert action in help_text
 
 
-def test_leads_commands_are_not_exposed_in_v0_1(runner, env):
-    result = runner.invoke(cli, ["leads", "--help"], env=env)
-    assert result.exit_code != ExitCode.SUCCESS
-
-
 @respx.mock
 def test_credentials_come_from_the_config_file_when_no_env_is_set(
     runner, home_config, episode_payload

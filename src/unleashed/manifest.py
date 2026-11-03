@@ -120,6 +120,9 @@ class Resource:
     maps: tuple[KeyValueMap, ...] | list[KeyValueMap] = dataclass_field(default_factory=tuple)
     #: For names that do not singularise by dropping an s, such as people.
     singular_name: str | None = None
+    #: When set, create also takes a JSON list of up to this many records. The API
+    #: answers a list with per-item outcomes (207) rather than failing the batch.
+    batch_create_max: int | None = None
 
     def __post_init__(self) -> None:
         names = [f.name for f in self.fields]
@@ -135,6 +138,8 @@ class Resource:
         clashing = {n for n in nested if nested.count(n) > 1}
         if clashing:
             raise ManifestError(f"{self.name} declares duplicate sub-resources: {sorted(clashing)}")
+        if self.batch_create_max is not None and self.batch_create_max < 1:
+            raise ManifestError(f"{self.name} needs a batch_create_max of at least 1.")
 
     @property
     def singular(self) -> str:

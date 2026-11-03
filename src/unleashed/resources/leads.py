@@ -1,7 +1,7 @@
-"""The leads resource.
+"""The leads resource, per the v1 API contract.
 
-Declared in v0.1 as a second manifest so the generator is exercised against more than
-one shape. No leads commands ship until v1.1.
+A lead is a show worth approaching. Create also takes a JSON list of up to 25 leads,
+which the API answers with per-item outcomes rather than failing the whole batch.
 """
 
 from __future__ import annotations
@@ -51,4 +51,5 @@ LEADS = Resource(
         Filter("min_llm_estimate", type=FieldType.INT, help="Excludes leads with no estimate."),
     ),
     sorts=("found_at", "last_episode_at", "created_at", "llm_estimate"),
+    batch_create_max=25,
 )

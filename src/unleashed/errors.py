@@ -84,6 +84,12 @@ class ConflictError(ApiError):
         return value if isinstance(value, str) else None
 
 
+class BatchError(UnleashedError):
+    """A batch create succeeded as a request, but one or more items were invalid."""
+
+    exit_code = ExitCode.VALIDATION
+
+
 class RateLimitError(ApiError):
     exit_code = ExitCode.RATE_LIMITED
 

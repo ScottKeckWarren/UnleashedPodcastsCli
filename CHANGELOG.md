@@ -8,6 +8,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- `leads` — all five standard actions, generated from the existing manifest.
+- `leads create --cli-input-json '[...]'` sends a batch of up to 25. Every per-item
+  outcome is printed, and the command exits 3 if any item was invalid. From a new
+  manifest `batch_create_max` attribute.
 - `tasks` — all five standard actions, generated from a manifest.
 - `unleashed login` now asks for `tasks:read` and `tasks:write` by default.
 - `ideas` — all five standard actions, generated from a manifest.

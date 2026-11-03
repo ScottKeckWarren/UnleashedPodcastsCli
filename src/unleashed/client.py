@@ -27,7 +27,7 @@ class DescribedRequest:
     method: str
     url: str
     headers: dict[str, str]
-    body: dict[str, Any] | None
+    body: dict[str, Any] | list[dict[str, Any]] | None
 
 
 class Client:
@@ -50,7 +50,7 @@ class Client:
         return f"{self.config.base_url}/{path.lstrip('/')}"
 
     def describe(
-        self, method: str, path: str, body: dict[str, Any] | None = None
+        self, method: str, path: str, body: dict[str, Any] | list[dict[str, Any]] | None = None
     ) -> DescribedRequest:
         return DescribedRequest(
             method=method.upper(),
@@ -64,7 +64,7 @@ class Client:
         method: str,
         path: str,
         *,
-        json: dict[str, Any] | None = None,
+        json: dict[str, Any] | list[dict[str, Any]] | None = None,
         params: dict[str, Any] | None = None,
         unwrap: bool = True,
     ) -> Any:
@@ -82,7 +82,7 @@ class Client:
             return payload["data"]
         return payload
 
-    def create(self, resource: str, body: dict[str, Any]) -> Any:
+    def create(self, resource: str, body: dict[str, Any] | list[dict[str, Any]]) -> Any:
         return self.request("POST", f"/{resource}", json=body)
 
     def index(
@@ -123,7 +123,7 @@ class Client:
         method: str,
         path: str,
         *,
-        json: dict[str, Any] | None,
+        json: dict[str, Any] | list[dict[str, Any]] | None,
         params: dict[str, Any] | None,
     ) -> httpx.Response:
         attempt = 0

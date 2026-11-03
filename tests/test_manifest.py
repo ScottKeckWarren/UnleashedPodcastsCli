@@ -78,7 +78,7 @@ def test_episodes_manifest_matches_the_documented_contract():
     assert EPISODES.field("podcast_uuid").immutable is True
 
 
-def test_leads_manifest_exists_as_a_fixture_for_the_generator():
+def test_leads_manifest_matches_the_documented_contract():
     assert LEADS.name == "leads"
     assert LEADS.field("llm_estimate").type is FieldType.INT
     assert LEADS.field("contacted_at").read_only is True
