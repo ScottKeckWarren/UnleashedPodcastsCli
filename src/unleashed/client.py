@@ -95,6 +95,9 @@ class Client:
     ) -> list[Any]:
         """Walk the index, following `meta.last_page` until the caller has enough.
 
+        `resource` is a path relative to the base URL, so a nested collection such as
+        `episodes/<uuid>/transcript/utterances` pages the same way a top-level one does.
+
         Auto-pagination is the default so a caller never mistakes page one for the
         whole answer. `--no-paginate` and `--max-items` are the ways to spend less.
         """

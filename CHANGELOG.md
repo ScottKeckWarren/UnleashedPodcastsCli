@@ -8,6 +8,9 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- `episodes transcript get` (with `--format none` for status polling) and
+  `episodes transcript utterances list` (paginated, with `--with-words`), from new
+  manifest `Document` and `Listing` declarations.
 - `leads` — all five standard actions, generated from the existing manifest.
 - `leads create --cli-input-json '[...]'` sends a batch of up to 25. Every per-item
   outcome is printed, and the command exits 3 if any item was invalid. From a new

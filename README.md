@@ -4,7 +4,7 @@ A command-line interface for the [UnleashedPodcasts.com](https://unleashedpodcas
 private v1 API, shaped like the AWS CLI: predictable `noun verb` commands, credentials
 from the environment, JSON in and JSON out.
 
-**Status: episodes, short form videos, people, ideas, tasks, and leads, plus `login`, `whoami`, and `configure`.** See [PRD.md](PRD.md) for the roadmap.
+**Status: episodes (with transcripts), short form videos, people, ideas, tasks, and leads, plus `login`, `whoami`, and `configure`.** See [PRD.md](PRD.md) for the roadmap.
 
 ## Install
 
@@ -324,6 +324,20 @@ Content-Type: application/json
   "target_published_date": "2026-09-15"
 }
 ```
+
+## Episode transcripts
+
+An episode's most recent transcript is read-only.
+
+```bash
+unleashed episodes transcript get <uuid>                    # status plus the full text
+unleashed episodes transcript get <uuid> --format none      # status only, for polling
+unleashed episodes transcript utterances list <uuid>        # speaker-attributed segments
+unleashed episodes transcript utterances list <uuid> --with-words --max-items 50
+```
+
+An unfinished transcript reads with a null text and an empty utterance list, so the same
+command can be polled. An episode with no transcript at all exits `5`.
 
 ## Ideas
 

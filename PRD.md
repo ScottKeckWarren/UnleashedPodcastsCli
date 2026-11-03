@@ -26,12 +26,10 @@ Shipped in milestones, narrowest first.
 | **v0.1** | All five episode actions, plus full auth: layered config files, named profiles, `unleashed configure`. | — |
 | **v0.2** | `unleashed login` and `whoami`; a distinct exit code for 403. **Short form videos** — five actions plus `video-file attach`/`detach`. **People** — five actions plus `metadata merge`/`replace`. | — (done, unreleased) |
 | **v0.3** | Podcasts resource — `podcasts list` / `get`. | `GET /apiv1/podcasts` does not exist. Server work first. |
-| **v0.4** | **Ideas**, **tasks**, and **leads** — five standard actions each; leads `create` also takes a batch. | — (in progress) |
+| **v0.4** | **Ideas**, **tasks**, and **leads** — five standard actions each; leads `create` also takes a batch. **Episode transcript** — `transcript get` and `transcript utterances list`. | — (done, unreleased) |
 
 Later, unscheduled:
 
-- **Episode transcript.** A read-only sub-resource (`/episodes/{uuid}/transcript` and
-  `/transcript/utterances`) is in the API.
 - **Person social media.** Needs server work first — see below.
 - A public library API.
 
@@ -52,7 +50,7 @@ one configured owner.
 show are enough; the CLI has no reason to write podcasts. Until it exists, users
 hand-copy podcast UUIDs out of the web app, which is **accepted through v0.2**.
 
-**Ideas, tasks, and leads — shipped in the API and the CLI (v0.4).**
+**Ideas, tasks, leads, transcript — shipped in the API and the CLI (v0.4).**
 
 **Person social media (unscheduled).** The web app stores a person's social accounts
 (`person_social_media`: platform, URL, username), but only web controllers use them —
@@ -84,8 +82,8 @@ The API accepts both `PUT` and `PATCH` on a record, with identical behavior. The
 | PUT | `/apiv1/episodes/{uuid}` | ✅ Yes | `episodes update` (sends PATCH) |
 | PATCH | `/apiv1/episodes/{uuid}` | ✅ Yes | `episodes update` |
 | DELETE | `/apiv1/episodes/{uuid}` | ✅ Yes | `episodes delete` |
-| GET | `/apiv1/episodes/{uuid}/transcript` | ❌ No | Unscheduled. Read-only sub-resource; needs a new manifest shape |
-| GET | `/apiv1/episodes/{uuid}/transcript/utterances` | ❌ No | Unscheduled. Paginated child listing of the transcript |
+| GET | `/apiv1/episodes/{uuid}/transcript` | ✅ Yes | `episodes transcript get` |
+| GET | `/apiv1/episodes/{uuid}/transcript/utterances` | ✅ Yes | `episodes transcript utterances list` |
 | GET | `/apiv1/short-form-videos` | ✅ Yes | `short-form-videos list` |
 | POST | `/apiv1/short-form-videos` | ✅ Yes | `short-form-videos create` |
 | GET | `/apiv1/short-form-videos/{uuid}` | ✅ Yes | `short-form-videos get` |
@@ -123,8 +121,8 @@ The API accepts both `PUT` and `PATCH` on a record, with identical behavior. The
 | POST | `/api/files/presigned-upload-url` | ❌ No | Non-goal (§4). Uses the browser session cookie, not a bearer token |
 | POST | `/api/files/upload-complete` | ❌ No | Non-goal (§4). Uses the browser session cookie |
 
-**Totals:** 42 of 46 operations supported. Of the 4 that aren't: 2 transcript
-(unscheduled) and 2 file uploads (non-goal).
+**Totals:** 44 of 46 operations supported. The 2 that aren't are the file uploads
+(non-goal).
 
 The CLI also needs endpoints that `docs.json` doesn't list yet:
 
@@ -258,9 +256,11 @@ belongs in that resource's manifest. This mirrors the API's own "Adding a Resour
 Shipped manifests: **episodes**, **short-form-videos**, **people**, **ideas**, **tasks**,
 **leads**.
 
-v0.4 added a resource-agnostic `batch_create_max`: `create` then also takes a
-`--cli-input-json` list, and a 207 with any `invalid` item prints the outcomes and
-exits 3.
+v0.4 added two resource-agnostic shapes. `batch_create_max` lets `create` take a
+`--cli-input-json` list; a 207 with any `invalid` item prints the outcomes and exits 3.
+`Document` declares a singular read-only sub-resource (`<resource> <name> get <uuid>`),
+and its `Listing`s nest paginated collections beneath it
+(`<resource> <name> <listing> list <uuid>`).
 
 ## 8. Configuration and Auth
 

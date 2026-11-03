@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unleashed.manifest import Field, FieldType, Filter, Resource
+from unleashed.manifest import Document, Field, FieldType, Filter, Listing, Resource
 
 EPISODE_STATUSES = (
     "Idea",
@@ -63,4 +63,33 @@ EPISODES = Resource(
         Filter("target_published_since", type=FieldType.DATE, help="On or after."),
     ),
     sorts=("target_published_date", "actual_published_date", "created_at", "name", "status"),
+    documents=(
+        Document(
+            "transcript",
+            params=(
+                Filter(
+                    "format",
+                    enum=("text", "none"),
+                    help="'none' omits the text body, for polling the status. Defaults to text.",
+                ),
+            ),
+            listings=(
+                Listing(
+                    "utterances",
+                    filters=(
+                        Filter(
+                            "with_words",
+                            type=FieldType.BOOL,
+                            help="Include per-word timing on each utterance.",
+                        ),
+                    ),
+                    help="Speaker-attributed segments, ordered by start time.",
+                ),
+            ),
+            help=(
+                "The episode's most recent transcript. An unfinished transcript reads with a "
+                "null text; an episode with no transcript at all is not found."
+            ),
+        ),
+    ),
 )
