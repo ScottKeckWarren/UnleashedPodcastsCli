@@ -4,7 +4,7 @@ A command-line interface for the [UnleashedPodcasts.com](https://unleashedpodcas
 private v1 API, shaped like the AWS CLI: predictable `noun verb` commands, credentials
 from the environment, JSON in and JSON out.
 
-**Status: episodes, short form videos, people, ideas, and tasks, plus `login`, `whoami`, and `configure`.** See [PRD.md](PRD.md) for the roadmap.
+**Status: episodes, short form videos, people, ideas, tasks, and leads, plus `login`, `whoami`, and `configure`.** See [PRD.md](PRD.md) for the roadmap.
 
 ## Install
 
@@ -354,6 +354,27 @@ unleashed tasks get <uuid>
 unleashed tasks update <uuid> --status completed --clear-due-date
 unleashed tasks delete <uuid>
 ```
+
+## Leads
+
+Shows worth approaching. The five actions, plus batch create.
+
+```bash
+unleashed leads create --show-name "The Example Show" --feed-url https://example.test/feed.xml
+unleashed leads list --status Identified --min-llm-estimate 60 --sort -llm_estimate
+unleashed leads update <uuid> --status Contacted
+```
+
+A single duplicate lead exits `6`. Pass a JSON list of up to 25 leads to create them in
+one request:
+
+```bash
+unleashed leads create --cli-input-json "$(cat leads.json)"
+```
+
+The API answers a list with per-item outcomes — `created`, `duplicate`, or `invalid` —
+and one bad item never fails the rest. The CLI prints every outcome, then exits `3` if
+any item was invalid.
 
 ## Output
 

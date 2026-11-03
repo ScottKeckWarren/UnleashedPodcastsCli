@@ -16,7 +16,7 @@ import click
 
 from unleashed.client import Client, DescribedRequest
 from unleashed.config import Config, load_config
-from unleashed.errors import UsageError
+from unleashed.errors import BatchError, UsageError
 from unleashed.manifest import Attachment, Field, FieldType, Filter, KeyValueMap, Resource
 from unleashed.output import OutputFormat, default_output, render
 from unleashed.reporting import handle_errors
@@ -172,21 +172,45 @@ def _body_from_flags(
     return body
 
 
-def _body_from_json(raw: str, resource: Resource, fields: tuple[Field, ...]) -> dict[str, Any]:
+Body = dict[str, Any] | list[dict[str, Any]]
+
+
+def _check_keys(
+    item: dict[str, Any], resource: Resource, fields: tuple[Field, ...], where: str
+) -> None:
+    rejected = sorted(set(item) - {f.name for f in fields})
+    if rejected:
+        raise UsageError(
+            f"--cli-input-json{where} contains keys that cannot be sent to {resource.name}: "
+            f"{', '.join(rejected)}"
+        )
+
+
+def _body_from_json(
+    raw: str, resource: Resource, fields: tuple[Field, ...], *, batch_max: int | None = None
+) -> Body:
+    """Parse --cli-input-json. A list is a batch, and only allowed when batch_max is set."""
     try:
         parsed = json.loads(raw)
     except json.JSONDecodeError as exc:
         raise UsageError(f"--cli-input-json is not valid JSON: {exc}") from exc
+
+    if isinstance(parsed, list) and batch_max is not None:
+        if not parsed:
+            raise UsageError("--cli-input-json must hold at least one item.")
+        if len(parsed) > batch_max:
+            raise UsageError(
+                f"--cli-input-json holds {len(parsed)} items; send at most {batch_max} at a time."
+            )
+        for index, item in enumerate(parsed):
+            if not isinstance(item, dict):
+                raise UsageError(f"--cli-input-json item {index} must be a JSON object.")
+            _check_keys(item, resource, fields, f" item {index}")
+        return parsed
+
     if not isinstance(parsed, dict):
         raise UsageError("--cli-input-json must be a JSON object for this action.")
-
-    writable = {f.name for f in fields}
-    rejected = sorted(set(parsed) - writable)
-    if rejected:
-        raise UsageError(
-            f"--cli-input-json contains keys that cannot be sent to {resource.name}: "
-            f"{', '.join(rejected)}"
-        )
+    _check_keys(parsed, resource, fields, "")
     return parsed
 
 
@@ -196,7 +220,9 @@ def _resolve_body(
     fields: tuple[Field, ...],
     values: dict[str, Any],
     raw_json: str | None,
-) -> dict[str, Any]:
+    *,
+    batch_max: int | None = None,
+) -> Body:
     if raw_json is None:
         return _body_from_flags(ctx, fields, values)
 
@@ -208,14 +234,37 @@ def _resolve_body(
         raise UsageError(
             f"--cli-input-json cannot be combined with field flags: {', '.join(conflicting)}"
         )
-    return _body_from_json(raw_json, resource, fields)
+    return _body_from_json(raw_json, resource, fields, batch_max=batch_max)
 
 
-def _require_create_fields(resource: Resource, body: dict[str, Any]) -> None:
-    missing = [f for f in resource.required_create_fields if f.name not in body]
-    if missing:
-        names = ", ".join(f"{f.flag_name} ({f.name})" for f in missing)
+def _require_create_fields(resource: Resource, body: Body) -> None:
+    if isinstance(body, list):
+        for index, item in enumerate(body):
+            missing = [f.name for f in resource.required_create_fields if f.name not in item]
+            if missing:
+                raise UsageError(f"--cli-input-json item {index} is missing: {', '.join(missing)}")
+        return
+    missing_fields = [f for f in resource.required_create_fields if f.name not in body]
+    if missing_fields:
+        names = ", ".join(f"{f.flag_name} ({f.name})" for f in missing_fields)
         raise UsageError(f"Missing required field(s): {names}")
+
+
+def _check_batch(resource: Resource, submitted: int, result: Any) -> None:
+    """A 207 is a successful request even when items failed. Fail the command instead."""
+    outcomes = result.get("results", []) if isinstance(result, dict) else []
+    invalid = [r for r in outcomes if isinstance(r, dict) and r.get("outcome") == "invalid"]
+    if not invalid:
+        return
+    lines = [f"{len(invalid)} of {submitted} {resource.name} were invalid."]
+    for item in invalid:
+        errors = item.get("errors") or {}
+        detail = "; ".join(
+            f"{field}: {' '.join(messages) if isinstance(messages, list) else messages}"
+            for field, messages in errors.items()
+        )
+        lines.append(f"  item {item.get('index')}: {detail or 'invalid'}")
+    raise BatchError("\n".join(lines))
 
 
 # --- shared plumbing ---------------------------------------------------------
@@ -240,7 +289,7 @@ class _Runtime:
         click.echo(render(value, self.output, self.query))
 
     def describe(
-        self, method: str, path: str, body: dict[str, Any] | None = None, params: Any = None
+        self, method: str, path: str, body: Body | None = None, params: Any = None
     ) -> None:
         described = self.client.describe(method, path, body)
         click.echo(f"# profile {self.config.profile}{_source_note(self.config)}")
@@ -279,13 +328,18 @@ def build_create_command(resource: Resource) -> click.Command:
     def callback(**values: Any) -> None:
         ctx = click.get_current_context()
         run = _Runtime(ctx, values)
-        body = _resolve_body(ctx, resource, fields, values, run.raw_json)
+        body = _resolve_body(
+            ctx, resource, fields, values, run.raw_json, batch_max=resource.batch_create_max
+        )
         _require_create_fields(resource, body)
 
         if run.dry_run:
             run.describe("POST", f"/{resource.name}", body)
             return
-        run.show(run.client.create(resource.name, body))
+        result = run.client.create(resource.name, body)
+        run.show(result)
+        if isinstance(body, list):
+            _check_batch(resource, len(body), result)
 
     params: list[click.Parameter] = [_option_for(f, required_note=True) for f in fields]
     params.extend(_common_options())

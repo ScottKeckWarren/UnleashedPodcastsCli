@@ -26,12 +26,10 @@ Shipped in milestones, narrowest first.
 | **v0.1** | All five episode actions, plus full auth: layered config files, named profiles, `unleashed configure`. | — |
 | **v0.2** | `unleashed login` and `whoami`; a distinct exit code for 403. **Short form videos** — five actions plus `video-file attach`/`detach`. **People** — five actions plus `metadata merge`/`replace`. | — (done, unreleased) |
 | **v0.3** | Podcasts resource — `podcasts list` / `get`. | `GET /apiv1/podcasts` does not exist. Server work first. |
-| **v0.4** | **Ideas** and **tasks** — five standard actions each. | — (in progress) |
+| **v0.4** | **Ideas**, **tasks**, and **leads** — five standard actions each; leads `create` also takes a batch. | — (in progress) |
 
 Later, unscheduled:
 
-- **Leads commands.** The manifest exists as a fixture and the API exists; shipping is a
-  one-line change to the shipped list plus tests.
 - **Episode transcript.** A read-only sub-resource (`/episodes/{uuid}/transcript` and
   `/transcript/utterances`) is in the API.
 - **Person social media.** Needs server work first — see below.
@@ -54,7 +52,7 @@ one configured owner.
 show are enough; the CLI has no reason to write podcasts. Until it exists, users
 hand-copy podcast UUIDs out of the web app, which is **accepted through v0.2**.
 
-**Ideas and tasks — shipped in the API and the CLI (v0.4).**
+**Ideas, tasks, and leads — shipped in the API and the CLI (v0.4).**
 
 **Person social media (unscheduled).** The web app stores a person's social accounts
 (`person_social_media`: platform, URL, username), but only web controllers use them —
@@ -116,17 +114,17 @@ The API accepts both `PUT` and `PATCH` on a record, with identical behavior. The
 | PUT | `/apiv1/tasks/{uuid}` | ✅ Yes | `tasks update` (sends PATCH) |
 | PATCH | `/apiv1/tasks/{uuid}` | ✅ Yes | `tasks update` |
 | DELETE | `/apiv1/tasks/{uuid}` | ✅ Yes | `tasks delete` |
-| GET | `/apiv1/leads` | ❌ No | Unscheduled. Manifest exists as a test fixture; not shipped |
-| POST | `/apiv1/leads` | ❌ No | Unscheduled. Also takes a batch, answered with 207 Multi-Status |
-| GET | `/apiv1/leads/{uuid}` | ❌ No | Unscheduled |
-| PUT | `/apiv1/leads/{uuid}` | ❌ No | Unscheduled |
-| PATCH | `/apiv1/leads/{uuid}` | ❌ No | Unscheduled |
-| DELETE | `/apiv1/leads/{uuid}` | ❌ No | Unscheduled |
+| GET | `/apiv1/leads` | ✅ Yes | `leads list` |
+| POST | `/apiv1/leads` | ✅ Yes | `leads create`; a `--cli-input-json` list of up to 25 is a batch (207) |
+| GET | `/apiv1/leads/{uuid}` | ✅ Yes | `leads get` |
+| PUT | `/apiv1/leads/{uuid}` | ✅ Yes | `leads update` (sends PATCH) |
+| PATCH | `/apiv1/leads/{uuid}` | ✅ Yes | `leads update` |
+| DELETE | `/apiv1/leads/{uuid}` | ✅ Yes | `leads delete` |
 | POST | `/api/files/presigned-upload-url` | ❌ No | Non-goal (§4). Uses the browser session cookie, not a bearer token |
 | POST | `/api/files/upload-complete` | ❌ No | Non-goal (§4). Uses the browser session cookie |
 
-**Totals:** 36 of 46 operations supported. Of the 10 that aren't: 6 leads
-(unscheduled), 2 transcript (unscheduled), and 2 file uploads (non-goal).
+**Totals:** 42 of 46 operations supported. Of the 4 that aren't: 2 transcript
+(unscheduled) and 2 file uploads (non-goal).
 
 The CLI also needs endpoints that `docs.json` doesn't list yet:
 
@@ -257,8 +255,12 @@ PEOPLE = Resource(
 **Nothing in the generator may reference a specific resource.** Anything resource-specific
 belongs in that resource's manifest. This mirrors the API's own "Adding a Resource" rule.
 
-Shipped manifests: **episodes**, **short-form-videos**, **people**, **ideas**, **tasks**. A **leads manifest**
-exists as a test fixture with no shipped commands.
+Shipped manifests: **episodes**, **short-form-videos**, **people**, **ideas**, **tasks**,
+**leads**.
+
+v0.4 added a resource-agnostic `batch_create_max`: `create` then also takes a
+`--cli-input-json` list, and a 207 with any `invalid` item prints the outcomes and
+exits 3.
 
 ## 8. Configuration and Auth
 
@@ -391,7 +393,7 @@ No sentinel values. `--description null` sends the literal string `"null"`.
   `--no-paginate` returns one page. `--max-items N` stops after N records.
   No default cap — nothing truncates silently. `per_page` caps at 100, clamped server-side.
 - **207 Multi-Status** on bulk create: surface per-item outcomes, exit non-zero if any
-  item was `invalid`. (Reachable only via leads, but the client layer handles it.)
+  item was `invalid`. (Reachable only via `leads create --cli-input-json '[...]'`.)
 - **409 Conflict** on duplicate create: report as a distinct outcome carrying the
   existing UUID.
 - **429:** honor `Retry-After`, retry with bounded backoff.
