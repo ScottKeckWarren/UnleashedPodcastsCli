@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-02
+
+First published release. It covers the v0.1, v0.2, and v0.4 milestones in
+[PRD.md](PRD.md); v0.3 (podcasts) is still blocked on server work.
+
 ### Added
 
 - `episodes transcript get` (with `--format none` for status polling) and
@@ -50,3 +55,6 @@ All notable changes to this project are documented here. The format follows
 - `--cli-input-json` as an alternative to field flags.
 - Distinct exit codes per API failure mode.
 - Bounded retry on 429 that honours `Retry-After`.
+
+[Unreleased]: https://github.com/ScottKeckWarren/UnleashedPodcastsCli/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/ScottKeckWarren/UnleashedPodcastsCli/releases/tag/v0.4.0

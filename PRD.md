@@ -24,9 +24,9 @@ Shipped in milestones, narrowest first.
 | Release | Contents | Blocked on |
 |---------|----------|------------|
 | **v0.1** | All five episode actions, plus full auth: layered config files, named profiles, `unleashed configure`. | — |
-| **v0.2** | `unleashed login` and `whoami`; a distinct exit code for 403. **Short form videos** — five actions plus `video-file attach`/`detach`. **People** — five actions plus `metadata merge`/`replace`. | — (done, unreleased) |
+| **v0.2** | `unleashed login` and `whoami`; a distinct exit code for 403. **Short form videos** — five actions plus `video-file attach`/`detach`. **People** — five actions plus `metadata merge`/`replace`. | — (released in 0.4.0) |
 | **v0.3** | Podcasts resource — `podcasts list` / `get`. | `GET /apiv1/podcasts` does not exist. Server work first. |
-| **v0.4** | **Ideas**, **tasks**, and **leads** — five standard actions each; leads `create` also takes a batch. **Episode transcript** — `transcript get` and `transcript utterances list`. | — (done, unreleased) |
+| **v0.4** | **Ideas**, **tasks**, and **leads** — five standard actions each; leads `create` also takes a batch. **Episode transcript** — `transcript get` and `transcript utterances list`. | — (released in 0.4.0) |
 
 Later, unscheduled:
 
