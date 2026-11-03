@@ -17,7 +17,16 @@ import click
 from unleashed.client import Client, DescribedRequest
 from unleashed.config import Config, load_config
 from unleashed.errors import BatchError, UsageError
-from unleashed.manifest import Attachment, Field, FieldType, Filter, KeyValueMap, Resource
+from unleashed.manifest import (
+    Attachment,
+    Document,
+    Field,
+    FieldType,
+    Filter,
+    KeyValueMap,
+    Listing,
+    Resource,
+)
 from unleashed.output import OutputFormat, default_output, render
 from unleashed.reporting import handle_errors
 
@@ -317,6 +326,33 @@ def _uuid_argument() -> click.Argument:
     return click.Argument(["uuid"])
 
 
+def _query_from(
+    ctx: click.Context, filters: tuple[Filter, ...], values: dict[str, Any]
+) -> dict[str, str]:
+    """Only the filters the caller passed become query parameters."""
+    return {f.name: _as_query_value(values[f.name]) for f in filters if _given(ctx, f.name)}
+
+
+def _pagination_options(per_page_help: str) -> list[click.Parameter]:
+    return [
+        click.Option(["--per-page"], type=click.INT, default=None, help=per_page_help),
+        click.Option(
+            ["--no-paginate"],
+            is_flag=True,
+            default=False,
+            help="Return only the first page instead of every record.",
+        ),
+        click.Option(
+            ["--max-items"], type=click.INT, default=None, help="Stop after this many records."
+        ),
+    ]
+
+
+def _pop_pagination(values: dict[str, Any]) -> tuple[int | None, bool, int | None]:
+    """Strip the pagination options off, as (per_page, paginate, max_items)."""
+    return values.pop("per_page"), not values.pop("no_paginate"), values.pop("max_items")
+
+
 # --- the five actions --------------------------------------------------------
 
 
@@ -440,14 +476,10 @@ def build_list_command(resource: Resource) -> click.Command:
     def callback(**values: Any) -> None:
         ctx = click.get_current_context()
         sort: str | None = values.pop("sort")
-        per_page: int | None = values.pop("per_page")
-        paginate: bool = not values.pop("no_paginate")
-        max_items: int | None = values.pop("max_items")
+        per_page, paginate, max_items = _pop_pagination(values)
         run = _Runtime(ctx, values)
 
-        params: dict[str, str] = {
-            f.name: _as_query_value(values[f.name]) for f in filters if _given(ctx, f.name)
-        }
+        params = _query_from(ctx, filters, values)
         if sort:
             _check_sort(resource, sort)
             params["sort"] = sort
@@ -468,16 +500,7 @@ def build_list_command(resource: Resource) -> click.Command:
                 metavar="COLUMN",
                 help="Allowlisted column. Prefix with - for descending.",
             ),
-            click.Option(["--per-page"], type=click.INT, default=None, help="Max 100."),
-            click.Option(
-                ["--no-paginate"],
-                is_flag=True,
-                default=False,
-                help="Return only the first page instead of every record.",
-            ),
-            click.Option(
-                ["--max-items"], type=click.INT, default=None, help="Stop after this many records."
-            ),
+            *_pagination_options("Max 100."),
         ]
     )
     params.extend(_common_options(accepts_json=False))
@@ -674,6 +697,87 @@ def build_map_group(resource: Resource, kv: KeyValueMap) -> click.Group:
     return group
 
 
+# --- read-only documents ------------------------------------------------------
+
+
+def build_document_get_command(resource: Resource, document: Document) -> click.Command:
+    params_spec = tuple(document.params)
+
+    @handle_errors
+    def callback(uuid: str, **values: Any) -> None:
+        ctx = click.get_current_context()
+        run = _Runtime(ctx, values)
+        path = f"/{resource.name}/{uuid}/{document.name}"
+        query = _query_from(ctx, params_spec, values)
+        if run.dry_run:
+            run.describe("GET", path, params=query)
+            return
+        run.show(run.client.request("GET", path, params=query or None))
+
+    params: list[click.Parameter] = [_uuid_argument()]
+    params.extend(_option_for(p) for p in params_spec)
+    params.extend(_common_options(accepts_json=False))
+    return click.Command(
+        name="get",
+        params=params,
+        callback=callback,
+        short_help=f"Fetch the {document.name} of one {resource.singular}.",
+        help=document.help or None,
+    )
+
+
+def build_listing_command(
+    resource: Resource, document: Document, listing: Listing
+) -> click.Command:
+    filters = tuple(listing.filters)
+
+    @handle_errors
+    def callback(uuid: str, **values: Any) -> None:
+        ctx = click.get_current_context()
+        per_page, paginate, max_items = _pop_pagination(values)
+        run = _Runtime(ctx, values)
+        path = f"{resource.name}/{uuid}/{document.name}/{listing.name}"
+
+        params = _query_from(ctx, filters, values)
+        if per_page:
+            params["per_page"] = str(per_page)
+        if run.dry_run:
+            run.describe("GET", f"/{path}", params=params)
+            return
+        run.show(run.client.index(path, params, paginate=paginate, max_items=max_items))
+
+    params: list[click.Parameter] = [_uuid_argument()]
+    params.extend(_option_for(f) for f in filters)
+    params.extend(_pagination_options("Records per page. The server clamps it."))
+    params.extend(_common_options(accepts_json=False))
+    return click.Command(
+        name="list",
+        params=params,
+        callback=callback,
+        short_help=f"List the {listing.name} of one {resource.singular}'s {document.name}.",
+        help=(
+            f"{listing.help or f'List the {listing.name}.'}\n\n"
+            "Every page is fetched by default. Use --no-paginate or --max-items to spend less."
+        ),
+    )
+
+
+def build_document_group(resource: Resource, document: Document) -> click.Group:
+    group = click.Group(
+        name=document.name,
+        help=document.help or f"Read the {document.name} of one {resource.singular}.",
+    )
+    group.add_command(build_document_get_command(resource, document))
+    for listing in document.listings:
+        nested = click.Group(
+            name=listing.name,
+            help=listing.help or f"List the {listing.name} of one {document.name}.",
+        )
+        nested.add_command(build_listing_command(resource, document, listing))
+        group.add_command(nested)
+    return group
+
+
 BUILDERS = (
     build_create_command,
     build_list_command,
@@ -696,4 +800,6 @@ def build_group(resource: Resource) -> click.Group:
         group.add_command(build_attachment_group(resource, attachment))
     for kv in resource.maps:
         group.add_command(build_map_group(resource, kv))
+    for document in resource.documents:
+        group.add_command(build_document_group(resource, document))
     return group

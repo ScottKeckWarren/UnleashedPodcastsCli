@@ -111,6 +111,39 @@ class KeyValueMap:
 
 
 @dataclass(frozen=True)
+class Listing:
+    """A paginated, read-only collection beneath a document.
+
+    GET /<resource>/<uuid>/<document>/<name> becomes
+    `<resource> <document> <name> list <uuid>`, paginated like any other list.
+    """
+
+    name: str
+    filters: tuple[Filter, ...] | list[Filter] = dataclass_field(default_factory=tuple)
+    help: str = ""
+
+
+@dataclass(frozen=True)
+class Document:
+    """A singular, read-only sub-resource of one record.
+
+    GET /<resource>/<uuid>/<name> becomes `<resource> <name> get <uuid>`. Params are
+    query parameters on that read; listings are collections nested beneath it.
+    """
+
+    name: str
+    params: tuple[Filter, ...] | list[Filter] = dataclass_field(default_factory=tuple)
+    listings: tuple[Listing, ...] | list[Listing] = dataclass_field(default_factory=tuple)
+    help: str = ""
+
+    def __post_init__(self) -> None:
+        names = [listing.name for listing in self.listings]
+        duplicates = {n for n in names if names.count(n) > 1} | ({"get"} & set(names))
+        if duplicates:
+            raise ManifestError(f"{self.name} declares duplicate listings: {sorted(duplicates)}")
+
+
+@dataclass(frozen=True)
 class Resource:
     name: str
     fields: tuple[Field, ...] | list[Field]
@@ -118,6 +151,7 @@ class Resource:
     sorts: tuple[str, ...] | list[str] = dataclass_field(default_factory=tuple)
     attachments: tuple[Attachment, ...] | list[Attachment] = dataclass_field(default_factory=tuple)
     maps: tuple[KeyValueMap, ...] | list[KeyValueMap] = dataclass_field(default_factory=tuple)
+    documents: tuple[Document, ...] | list[Document] = dataclass_field(default_factory=tuple)
     #: For names that do not singularise by dropping an s, such as people.
     singular_name: str | None = None
     #: When set, create also takes a JSON list of up to this many records. The API
@@ -134,7 +168,11 @@ class Resource:
             raise ManifestError(
                 f"{self.name} allows a sort on {unknown_sorts}, which are not fields."
             )
-        nested = [a.name for a in self.attachments] + [m.name for m in self.maps]
+        nested = (
+            [a.name for a in self.attachments]
+            + [m.name for m in self.maps]
+            + [d.name for d in self.documents]
+        )
         clashing = {n for n in nested if nested.count(n) > 1}
         if clashing:
             raise ManifestError(f"{self.name} declares duplicate sub-resources: {sorted(clashing)}")
