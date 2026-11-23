@@ -2,7 +2,8 @@
 
 A short stands alone, sits under a podcast, or sits under an episode — an episode brings
 its own podcast, so podcast_uuid is only needed without one. The video itself is
-attached afterwards through the video-file sub-resource.
+attached afterwards through the video-file sub-resource, or uploaded and attached in one
+step with `video-file upload`.
 """
 
 from __future__ import annotations
@@ -48,7 +49,9 @@ SHORT_FORM_VIDEOS = Resource(
         Attachment(
             "video-file",
             id_field="file_uuid",
-            help="UUID of an uploaded video file you own. Upload it in the web app.",
+            help="UUID of an uploaded video file you own, from `files upload` or `files list`.",
+            upload_as="short_form_video",
+            accept="video/",
         ),
     ),
 )

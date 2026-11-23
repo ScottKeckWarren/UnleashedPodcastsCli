@@ -86,11 +86,21 @@ class Attachment:
     PUT /<resource>/<uuid>/<name> with {<id_field>: ...} attaches, replacing whatever
     was attached before. DELETE on the same path detaches. It becomes a nested
     `<resource> <name> attach|detach` group — still noun verb, never an ad-hoc verb.
+
+    upload_as   the resource_type upload-complete takes for this record; when set, the
+                group also gets `upload <uuid> <path>`, which uploads and attaches in one go
+    accept      MIME prefix the uploaded file must have, such as "video/"
     """
 
     name: str
     id_field: str
     help: str = ""
+    upload_as: str | None = None
+    accept: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.accept is not None and self.upload_as is None:
+            raise ManifestError(f"{self.name} sets accept without upload_as.")
 
     @property
     def id_flag_name(self) -> str:
@@ -143,6 +153,10 @@ class Document:
             raise ManifestError(f"{self.name} declares duplicate listings: {sorted(duplicates)}")
 
 
+#: The standard actions, in the order help lists them.
+STANDARD_ACTIONS = ("create", "list", "get", "update", "delete")
+
+
 @dataclass(frozen=True)
 class Resource:
     name: str
@@ -157,8 +171,15 @@ class Resource:
     #: When set, create also takes a JSON list of up to this many records. The API
     #: answers a list with per-item outcomes (207) rather than failing the batch.
     batch_create_max: int | None = None
+    #: Which standard actions the API offers. A read-only resource lists only some.
+    actions: tuple[str, ...] | list[str] = STANDARD_ACTIONS
+    #: When true, the group gains `upload <path>`: the direct-to-storage upload flow.
+    uploads: bool = False
 
     def __post_init__(self) -> None:
+        unknown_actions = sorted(set(self.actions) - set(STANDARD_ACTIONS))
+        if unknown_actions:
+            raise ManifestError(f"{self.name} declares unknown actions: {unknown_actions}")
         names = [f.name for f in self.fields]
         duplicates = {n for n in names if names.count(n) > 1}
         if duplicates:
@@ -178,6 +199,8 @@ class Resource:
             raise ManifestError(f"{self.name} declares duplicate sub-resources: {sorted(clashing)}")
         if self.batch_create_max is not None and self.batch_create_max < 1:
             raise ManifestError(f"{self.name} needs a batch_create_max of at least 1.")
+        if self.batch_create_max is not None and "create" not in self.actions:
+            raise ManifestError(f"{self.name} sets batch_create_max but has no create action.")
 
     @property
     def singular(self) -> str:

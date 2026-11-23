@@ -39,6 +39,8 @@ ABILITIES = (
     "leads:write",
     "tasks:read",
     "tasks:write",
+    "files:read",
+    "files:write",
 )
 
 #: How long to wait for the browser. The server's code lives two minutes after approval,

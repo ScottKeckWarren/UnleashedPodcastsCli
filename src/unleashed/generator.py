@@ -10,10 +10,12 @@ from __future__ import annotations
 import datetime as dt
 import json
 import sys
+from pathlib import Path
 from typing import Any
 
 import click
 
+from unleashed import uploads
 from unleashed.client import Client, DescribedRequest
 from unleashed.config import Config, load_config
 from unleashed.errors import BatchError, UsageError
@@ -588,13 +590,123 @@ def build_detach_command(resource: Resource, attachment: Attachment) -> click.Co
 
 
 def build_attachment_group(resource: Resource, attachment: Attachment) -> click.Group:
+    verbs = "Upload, attach, or detach" if attachment.upload_as else "Attach or detach"
     group = click.Group(
         name=attachment.name,
-        help=f"Attach or detach the {attachment.name} of one {resource.singular}.",
+        help=f"{verbs} the {attachment.name} of one {resource.singular}.",
     )
     group.add_command(build_attach_command(resource, attachment))
     group.add_command(build_detach_command(resource, attachment))
+    if attachment.upload_as:
+        group.add_command(build_attachment_upload_command(resource, attachment))
     return group
+
+
+# --- uploads -----------------------------------------------------------------
+
+_PUBLIC_NOTE = "The stored file is publicly readable by anyone who has its URL."
+
+
+def _upload_params(*, with_uuid: bool) -> list[click.Parameter]:
+    params: list[click.Parameter] = [_uuid_argument()] if with_uuid else []
+    params.extend(
+        [
+            click.Argument(["path"], type=click.Path(dir_okay=False, path_type=Path)),
+            click.Option(
+                ["--type", "mime_type"],
+                type=click.Choice(uploads.ALLOWED_TYPES),
+                default=None,
+                help="MIME type. Guessed from the file extension when omitted.",
+            ),
+        ]
+    )
+    params.extend(_common_options(accepts_json=False))
+    return params
+
+
+def _run_upload(
+    run: _Runtime,
+    plan: uploads.UploadPlan,
+    *,
+    resource_type: str | None = None,
+    resource_id: str | None = None,
+) -> None:
+    if run.dry_run:
+        _describe_upload(run, plan, resource_type, resource_id)
+        return
+    click.echo(
+        f"Uploading {plan.filename} ({plan.size} bytes, {plan.type}). {_PUBLIC_NOTE}", err=True
+    )
+    run.show(uploads.upload(run.client, plan, resource_type=resource_type, resource_id=resource_id))
+
+
+def _describe_upload(
+    run: _Runtime,
+    plan: uploads.UploadPlan,
+    resource_type: str | None,
+    resource_id: str | None,
+) -> None:
+    """All three steps. The middle one goes to storage, so it carries no token."""
+    run.describe("POST", uploads.root_url(run.client, uploads.PRESIGN_PATH), plan.presign_body())
+    click.echo("")
+    click.echo("PUT <url from step 1>")
+    click.echo("<every header in fields from step 1>")
+    click.echo(f"Content-Length: {plan.size}")
+    click.echo("")
+    click.echo(f"<{plan.size} bytes of {plan.path}>")
+    click.echo("")
+    complete = plan.complete_body("<key from step 1>", resource_type, resource_id)
+    click.echo(
+        _describe(
+            run.client.describe(
+                "POST", uploads.root_url(run.client, uploads.COMPLETE_PATH), complete
+            )
+        )
+    )
+
+
+def build_upload_command(resource: Resource) -> click.Command:
+    @handle_errors
+    def callback(path: Path, mime_type: str | None, **values: Any) -> None:
+        ctx = click.get_current_context()
+        run = _Runtime(ctx, values)
+        _run_upload(run, uploads.plan(path, mime_type=mime_type))
+
+    return click.Command(
+        name="upload",
+        params=_upload_params(with_uuid=False),
+        callback=callback,
+        short_help="Upload a local file.",
+        help=(
+            "Upload a local file, straight to storage, and print the file record. Its id "
+            "is the file UUID other commands take.\n\n"
+            f"At most 2GB. {_PUBLIC_NOTE}"
+        ),
+    )
+
+
+def build_attachment_upload_command(resource: Resource, attachment: Attachment) -> click.Command:
+    singular = resource.singular
+
+    @handle_errors
+    def callback(uuid: str, path: Path, mime_type: str | None, **values: Any) -> None:
+        ctx = click.get_current_context()
+        run = _Runtime(ctx, values)
+        plan = uploads.plan(path, mime_type=mime_type, accept=attachment.accept)
+        _run_upload(run, plan, resource_type=attachment.upload_as, resource_id=uuid)
+
+    accept_note = f" Only {attachment.accept}* files." if attachment.accept else ""
+    return click.Command(
+        name="upload",
+        params=_upload_params(with_uuid=True),
+        callback=callback,
+        short_help=f"Upload a file and attach it as the {attachment.name} of one {singular}.",
+        help=(
+            f"Upload a local file and attach it as the {attachment.name} of one {singular}, "
+            "replacing whatever was attached before.\n\n"
+            f"At most 2GB.{accept_note} {_PUBLIC_NOTE}"
+        ),
+    )
 
 
 # --- key-value maps ----------------------------------------------------------
@@ -778,24 +890,26 @@ def build_document_group(resource: Resource, document: Document) -> click.Group:
     return group
 
 
-BUILDERS = (
-    build_create_command,
-    build_list_command,
-    build_get_command,
-    build_update_command,
-    build_delete_command,
-)
+BUILDERS = {
+    "create": build_create_command,
+    "list": build_list_command,
+    "get": build_get_command,
+    "update": build_update_command,
+    "delete": build_delete_command,
+}
 
 
 def build_group(resource: Resource) -> click.Group:
-    """One group per resource, five standard actions, no ad-hoc verbs.
+    """One group per resource, the standard actions it declares, no ad-hoc verbs.
 
     Attachments nest as their own noun, so `<resource> <attachment> attach` keeps the
     noun verb shape instead of inventing a verb per sub-resource.
     """
     group = click.Group(name=resource.name, help=f"Work with {resource.name}.")
-    for builder in BUILDERS:
-        group.add_command(builder(resource))
+    for action in resource.actions:
+        group.add_command(BUILDERS[action](resource))
+    if resource.uploads:
+        group.add_command(build_upload_command(resource))
     for attachment in resource.attachments:
         group.add_command(build_attachment_group(resource, attachment))
     for kv in resource.maps:

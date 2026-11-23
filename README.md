@@ -4,7 +4,7 @@ A command-line interface for the [UnleashedPodcasts.com](https://unleashedpodcas
 private v1 API, shaped like the AWS CLI: predictable `noun verb` commands, credentials
 from the environment, JSON in and JSON out.
 
-**Status: episodes (with transcripts), short form videos, people, ideas, tasks, and leads, plus `login`, `whoami`, and `configure`.** See [PRD.md](PRD.md) for the roadmap.
+**Status: episodes (with transcripts), short form videos, people, ideas, tasks, leads, and files (with uploads), plus `login`, `whoami`, and `configure`.** See [PRD.md](PRD.md) for the roadmap.
 
 ## Install
 
@@ -247,7 +247,7 @@ The API soft-deletes. There is no restore endpoint; recovery is a database task.
 
 ## Short form videos
 
-The same five actions, plus a `video-file` attachment.
+The same five actions, plus a `video-file` attachment you can upload straight from disk.
 
 ```bash
 unleashed short-form-videos create --title "Three mistakes new hosts make" \
@@ -265,13 +265,15 @@ another podcast drops its episode.
 ### Video file
 
 ```bash
+unleashed short-form-videos video-file upload <uuid> ./clip.mp4      # upload and attach
 unleashed short-form-videos video-file attach <uuid> --file-uuid <file-uuid>
 unleashed short-form-videos video-file detach <uuid>
 ```
 
-Attaching replaces any video already attached; detaching keeps the file itself. Upload
-the video in the web app first — file uploads use the browser session, not the API
-token, so the CLI does not upload.
+`upload` sends the file straight to storage and attaches it in one go. It takes
+`video/*` files only (`.mp4`, `.mov`, `.webm`, `.avi`), up to 2GB. Attaching or
+uploading replaces any video already attached; detaching keeps the file itself. See
+[Files](#files) for the abilities uploads need.
 
 ## People
 
@@ -389,6 +391,30 @@ unleashed leads create --cli-input-json "$(cat leads.json)"
 The API answers a list with per-item outcomes — `created`, `duplicate`, or `invalid` —
 and one bad item never fails the rest. The CLI prints every outcome, then exits `3` if
 any item was invalid.
+
+## Files
+
+Files you have uploaded. These routes need the `files:read` and `files:write`
+abilities; a token issued before they existed exits `8` — run `unleashed login` again.
+
+```bash
+unleashed files upload ./cover.png                 # print the new file record
+unleashed files list --type video/mp4 --sort -size
+unleashed files get <uuid>
+```
+
+`upload` runs three requests: it asks the API for a presigned storage URL, PUTs the
+bytes there, then tells the API the upload is complete. The token goes to the API only,
+never to storage. The MIME type is guessed from the extension; pass `--type` to
+override it. At most 2GB. `--dry-run` prints all three steps and sends nothing.
+
+The `id` in the printed record is the file UUID that `video-file attach --file-uuid`
+takes.
+
+**Uploaded files are publicly readable** by anyone who has their URL. Do not upload
+anything private.
+
+There is no `create`, `update`, or `delete` for files.
 
 ## Output
 
