@@ -6,6 +6,33 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-22
+
+File uploads. The API's upload routes now accept the CLI's bearer token, so the CLI
+can upload instead of sending you to the web app.
+
+### Added
+
+- `files upload <path>` — uploads a local file straight to storage (presign, PUT,
+  complete) and prints the file record. The MIME type is guessed from the extension,
+  or set with `--type`. Type and the 2GB ceiling are checked before any request.
+  `--dry-run` prints all three steps. The bearer token is never sent to storage.
+- `files list` and `files get`, with `--type` and `--original-name` filters.
+- `short-form-videos video-file upload <uuid> <path>` — uploads a video and attaches
+  it to the short in one step. Only `video/*` files are accepted.
+- Manifest `actions`, for resources that offer only some of the five standard actions;
+  manifest `uploads`; and `Attachment.upload_as` / `accept`.
+
+### Changed
+
+- `unleashed login` now asks for `files:read` and `files:write` by default. Tokens
+  issued before 0.5.0 lack them and exit `8` on file commands; run `unleashed login`
+  again.
+
+### Security
+
+- Uploaded files are stored publicly readable. Every upload says so on stderr.
+
 ## [0.4.0] - 2026-11-02
 
 First published release. It covers the v0.1, v0.2, and v0.4 milestones in
@@ -56,5 +83,6 @@ First published release. It covers the v0.1, v0.2, and v0.4 milestones in
 - Distinct exit codes per API failure mode.
 - Bounded retry on 429 that honours `Retry-After`.
 
-[Unreleased]: https://github.com/ScottKeckWarren/UnleashedPodcastsCli/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/ScottKeckWarren/UnleashedPodcastsCli/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/ScottKeckWarren/UnleashedPodcastsCli/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/ScottKeckWarren/UnleashedPodcastsCli/releases/tag/v0.4.0
