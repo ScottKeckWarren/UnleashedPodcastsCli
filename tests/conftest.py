@@ -5,16 +5,21 @@ from unleashed.config import Config
 
 
 @pytest.fixture(autouse=True)
-def isolated_home(tmp_path, monkeypatch):
-    """Never read the developer's real ~/.unleashed/config during a test run."""
+def isolated_home(request, tmp_path, monkeypatch):
+    """Never read the developer's real ~/.unleashed/config during a test run.
+
+    Live tests keep UNLEASHED_API_URL and UNLEASHED_API_TOKEN: the environment is the
+    only way they are pointed at a host.
+    """
     home = tmp_path / "home"
     home.mkdir()
     work = tmp_path / "work"
     work.mkdir()
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("USERPROFILE", str(home))
-    monkeypatch.delenv("UNLEASHED_API_URL", raising=False)
-    monkeypatch.delenv("UNLEASHED_API_TOKEN", raising=False)
+    if request.node.get_closest_marker("live") is None:
+        monkeypatch.delenv("UNLEASHED_API_URL", raising=False)
+        monkeypatch.delenv("UNLEASHED_API_TOKEN", raising=False)
     monkeypatch.delenv("UNLEASHED_PROFILE", raising=False)
     monkeypatch.chdir(work)
     return home, work
