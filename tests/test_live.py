@@ -37,3 +37,29 @@ def test_a_bad_token_is_rejected(live_config):
     client = Client(Config(base_url=live_config.base_url, token="definitely-wrong"))
     with pytest.raises(AuthError):
         client.request("GET", "/episodes", params={"per_page": 1})
+
+
+HTTP_METHODS = {"get", "post", "put", "patch", "delete"}
+
+
+def test_prd_lists_every_docs_json_operation(live_config):
+    """The server can grow endpoints PRD.md has never heard of. Name each one."""
+    import re
+    from pathlib import Path
+
+    import httpx
+
+    spec = httpx.get(f"{live_config.base_url}/docs.json", timeout=30).json()
+    served = {
+        (method.upper(), path)
+        for path, operations in spec["paths"].items()
+        for method in operations
+        if method in HTTP_METHODS
+    }
+    prd = (Path(__file__).parent.parent / "PRD.md").read_text()
+    documented = set(re.findall(r"^\| (GET|POST|PUT|PATCH|DELETE) \| `([^`]+)`", prd, re.M))
+
+    missing = sorted(served - documented)
+    assert not missing, "docs.json operations missing from PRD.md's endpoint table:\n" + "\n".join(
+        f"  {method} {path}" for method, path in missing
+    )

@@ -8,13 +8,13 @@ from the environment, JSON in and JSON out.
 
 ## Install
 
-Once published to PyPI:
+From PyPI:
 
 ```bash
 uv tool install unleashed-podcasts-cli
 ```
 
-Straight from the repository, which works today:
+Unreleased changes on `main`, straight from the repository:
 
 ```bash
 uv tool install git+https://github.com/ScottKeckWarren/UnleashedPodcastsCli
