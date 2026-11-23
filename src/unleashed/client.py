@@ -47,6 +47,9 @@ class Client:
         self._timeout = timeout
 
     def url_for(self, path: str) -> str:
+        """A path relative to the base URL, or an absolute URL passed through."""
+        if path.startswith(("https://", "http://")):
+            return path
         return f"{self.config.base_url}/{path.lstrip('/')}"
 
     def describe(

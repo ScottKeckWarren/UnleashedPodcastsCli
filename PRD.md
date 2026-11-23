@@ -1,6 +1,6 @@
 # Unleashed Podcasts CLI — Product Requirements
 
-**Status:** Draft v0.7 — login, short form videos, and people folded in.
+**Status:** Draft v0.8 — file uploads folded in.
 
 ## 1. Problem
 
@@ -27,6 +27,7 @@ Shipped in milestones, narrowest first.
 | **v0.2** | `unleashed login` and `whoami`; a distinct exit code for 403. **Short form videos** — five actions plus `video-file attach`/`detach`. **People** — five actions plus `metadata merge`/`replace`. | — (released in 0.4.0) |
 | **v0.3** | Podcasts resource — `podcasts list` / `get`. | `GET /apiv1/podcasts` does not exist. Server work first. |
 | **v0.4** | **Ideas**, **tasks**, and **leads** — five standard actions each; leads `create` also takes a batch. **Episode transcript** — `transcript get` and `transcript utterances list`. | — (released in 0.4.0) |
+| **v0.5** | **Files** — `list`, `get`, and `upload`. **Short form videos** — `video-file upload`, which uploads and attaches in one step. `login` asks for `files:read` and `files:write`. | — (released in 0.5.0) |
 
 Later, unscheduled:
 
@@ -118,11 +119,17 @@ The API accepts both `PUT` and `PATCH` on a record, with identical behavior. The
 | PUT | `/apiv1/leads/{uuid}` | ✅ Yes | `leads update` (sends PATCH) |
 | PATCH | `/apiv1/leads/{uuid}` | ✅ Yes | `leads update` |
 | DELETE | `/apiv1/leads/{uuid}` | ✅ Yes | `leads delete` |
-| POST | `/api/files/presigned-upload-url` | ❌ No | Non-goal (§4). Uses the browser session cookie, not a bearer token |
-| POST | `/api/files/upload-complete` | ❌ No | Non-goal (§4). Uses the browser session cookie |
+| GET | `/apiv1/files` | ✅ Yes | `files list` |
+| GET | `/apiv1/files/{uuid}` | ✅ Yes | `files get` |
+| POST | `/api/files/presigned-upload-url` | ✅ Yes | `files upload`, `short-form-videos video-file upload` (step 1) |
+| POST | `/api/files/upload-complete` | ✅ Yes | `files upload`, `short-form-videos video-file upload` (step 3; attaches via `resource_type`) |
 
-**Totals:** 44 of 46 operations supported. The 2 that aren't are the file uploads
-(non-goal).
+**Totals:** 48 of 48 operations supported.
+
+The upload routes sit beside `/apiv1`, at `<site>/api/files/*`, and accept the bearer
+token when it carries `files:write`. Step 2 of an upload is a PUT of the raw bytes to
+the presigned storage URL step 1 returns; it carries the signed `fields` as headers and
+never the bearer token.
 
 The CLI also needs endpoints that `docs.json` doesn't list yet:
 
@@ -134,9 +141,7 @@ page. It isn't part of `/apiv1`, so it isn't in the table.
 
 ## 4. Non-Goals
 
-- No coverage of the session-cookie upload endpoints (`/api/files/*`) — browser-only surface.
-  `short-form-videos video-file attach` takes the UUID of a file already uploaded in
-  the web app; the CLI never uploads.
+- No resumable or multipart uploads. One PUT per file, up to the server's 2GB ceiling.
 - No local caching, sync, or offline mode.
 - No interactive TUI / wizard.
 - No API versions other than v1 (there is no v2).
@@ -166,6 +171,8 @@ unleashed episodes update <uuid> --clear-description
 unleashed episodes delete <uuid>
 
 unleashed short-form-videos video-file attach <uuid> --file-uuid ...
+unleashed short-form-videos video-file upload <uuid> ./clip.mp4
+unleashed files upload ./cover.png
 unleashed people metadata merge <uuid> --set tier=gold --unset twitter
 
 unleashed login
@@ -254,13 +261,19 @@ PEOPLE = Resource(
 belongs in that resource's manifest. This mirrors the API's own "Adding a Resource" rule.
 
 Shipped manifests: **episodes**, **short-form-videos**, **people**, **ideas**, **tasks**,
-**leads**.
+**leads**, **files**.
 
 v0.4 added two resource-agnostic shapes. `batch_create_max` lets `create` take a
 `--cli-input-json` list; a 207 with any `invalid` item prints the outcomes and exits 3.
 `Document` declares a singular read-only sub-resource (`<resource> <name> get <uuid>`),
 and its `Listing`s nest paginated collections beneath it
 (`<resource> <name> <listing> list <uuid>`).
+
+v0.5 added three more. `actions` limits a resource to some of the five standard
+actions, for read-only resources such as files. `uploads=True` gives a resource
+`upload <path>`, the direct-to-storage flow. An `Attachment` with `upload_as` (the
+`resource_type` upload-complete takes) gains `upload <uuid> <path>`, which uploads and
+attaches in one step; `accept` restricts it to a MIME prefix such as `video/`.
 
 ## 8. Configuration and Auth
 
@@ -325,7 +338,8 @@ handshake**, the same shape as OAuth's PKCE flow. There is no password prompt.
 - **`<site>` is derived from `api_url`** by stripping `/apiv1`, so one base URL in the
   config still covers both the approval page and the API.
 - **Abilities** default to every one the site grants (`episodes:read`,
-  `episodes:write`, `leads:read`, `leads:write`, `tasks:read`, `tasks:write`);
+  `episodes:write`, `leads:read`, `leads:write`, `tasks:read`, `tasks:write`,
+  `files:read`, `files:write`);
   `--ability` narrows the request. A
   missing ability is a 403, reported with its own exit code (8).
 - **`api_url`** comes from `--api-url`, then the selected profile's existing value, then
