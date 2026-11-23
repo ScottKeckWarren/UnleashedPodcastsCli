@@ -14,3 +14,6 @@ htmlcov/
 
 # Local credentials. Never commit.
 .unleashed/
+
+# macOS Finder metadata
+.DS_Store
